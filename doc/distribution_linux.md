@@ -49,7 +49,7 @@ In case the public key still cannot be retrieved, check and specify proxy settin
 **Important** Removing Debian package is allowed only when no other installed packages directly refer to it. For example removing `librealsense2-udev-rules` requires `librealsense2` to be removed first.
 
 Remove a single package with:   
-  `sudo apt-get --purge <package-name>`  
+  `sudo apt-get remove --purge librealsense2`  
 
 Remove all RealSense™ SDK-related packages with:   
   `dpkg -l | grep "realsense" | cut -d " " -f 3 | xargs sudo dpkg --purge`  
