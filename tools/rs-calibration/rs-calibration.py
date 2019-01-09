@@ -150,7 +150,7 @@ class imu_wrapper:
         for bucket,bucket_label  in zip(buckets, bucket_labels):
             self.crnt_bucket = np.array(bucket)
             self.crnt_direction = np.array(bucket) / np.linalg.norm(np.array(bucket))
-            print('Align to direction: ', self.crnt_direction, ' ', bucket_label)
+            print('\nAlign to direction: ', self.crnt_direction, ' ', bucket_label)
             self.status = self.Status.rotate
             self.thread.acquire()
             self.thread.wait()
