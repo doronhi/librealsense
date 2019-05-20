@@ -106,17 +106,7 @@ namespace librealsense
         case backend_type::standard:
             _backend = platform::create_backend();
 #if WITH_TRACKING
-            _tm2_context = std::make_shared<tm2_context>(this);
-            _tm2_context->on_device_changed += [this](std::shared_ptr<tm2_info> removed, std::shared_ptr<tm2_info> added)-> void
-            {
-                std::vector<rs2_device_info> rs2_devices_info_added;
-                std::vector<rs2_device_info> rs2_devices_info_removed;
-                if (removed)
-                    rs2_devices_info_removed.push_back({ shared_from_this(), removed });
-                if (added)
-                    rs2_devices_info_added.push_back({ shared_from_this(), added });
-                raise_devices_changed(rs2_devices_info_removed, rs2_devices_info_added);
-            };
+            init_tracking_module();
 #endif
             break;
         case backend_type::record:
@@ -561,6 +551,22 @@ namespace librealsense
     }
 
 #if WITH_TRACKING
+    void context::init_tracking_module()
+    {
+        _tm2_context = std::make_shared<tm2_context>(this);
+        _tm2_context->on_device_changed += [this](std::shared_ptr<tm2_info> removed, std::shared_ptr<tm2_info> added)-> void
+        {
+            LOG_INFO("_tm2_context->on_device_changed");
+            std::vector<rs2_device_info> rs2_devices_info_added;
+            std::vector<rs2_device_info> rs2_devices_info_removed;
+            if (removed)
+                rs2_devices_info_removed.push_back({ shared_from_this(), removed });
+            if (added)
+                rs2_devices_info_added.push_back({ shared_from_this(), added });
+            raise_devices_changed(rs2_devices_info_removed, rs2_devices_info_added);
+        };
+    }
+
     void context::unload_tracking_module()
     {
         _tm2_context.reset();

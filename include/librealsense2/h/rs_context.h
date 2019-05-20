@@ -81,6 +81,13 @@ void rs2_context_remove_device(rs2_context* ctx, const char* file, rs2_error** e
 void rs2_context_unload_tracking_module(rs2_context* ctx, rs2_error** error);
 
 /**
+ * Init tracking module.
+ * If application wants to connect to tracking module after it has been removed by rs2_context_unload_tracking_module,
+ * it needs to re-initialize it using rs2_context_init_tracking_module();
+ */
+void rs2_context_init_tracking_module(rs2_context* ctx, rs2_error** error);
+
+/**
 * create a static snapshot of all connected devices at the time of the call
 * \param context     Object representing librealsense session
 * \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored

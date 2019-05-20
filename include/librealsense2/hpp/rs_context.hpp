@@ -206,6 +206,13 @@ namespace rs2
             rs2::error::handle(e);
         }
 
+        void init_tracking_module()
+        {
+            rs2_error* e = nullptr;
+            rs2_context_init_tracking_module(_context.get(), &e);
+            rs2::error::handle(e);
+        }
+
         context(std::shared_ptr<rs2_context> ctx)
             : _context(ctx)
         {}

@@ -133,6 +133,7 @@ namespace librealsense
         void add_software_device(std::shared_ptr<device_info> software_device);
 
 #if WITH_TRACKING
+        void init_tracking_module();
         void unload_tracking_module();
 #endif
 
