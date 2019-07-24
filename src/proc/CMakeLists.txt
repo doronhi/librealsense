@@ -26,6 +26,7 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/threshold.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/rates-printer.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/zero-order.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/depth-smear.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/units-transform.cpp"
 
         "${CMAKE_CURRENT_LIST_DIR}/processing-blocks-factory.h"
@@ -44,5 +45,6 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/threshold.h"
         "${CMAKE_CURRENT_LIST_DIR}/rates-printer.h"
         "${CMAKE_CURRENT_LIST_DIR}/zero-order.h"
+        "${CMAKE_CURRENT_LIST_DIR}/depth-smear.h"
         "${CMAKE_CURRENT_LIST_DIR}/units-transform.h"
 )

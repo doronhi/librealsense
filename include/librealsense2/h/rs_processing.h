@@ -244,6 +244,13 @@ rs2_processing_block* rs2_create_rates_printer_block(rs2_error** error);
 rs2_processing_block* rs2_create_zero_order_invalidation_block(rs2_error** error);
 
 /**
+* Creates Depth post-processing smear fix block. The filter invalidates pixels that has a wrong value due to beam spread effect
+* \param[out] error     If non-null, receives any error that occurs during this call, otherwise, errors are ignored
+* \return               depth smear fix processing block
+*/
+rs2_processing_block* rs2_create_depth_smear_invalidation_block(rs2_error** error);
+
+/**
 * Retrieve processing block specific information, like name.
 * \param[in]  block     The processing block
 * \param[in]  info      processing block info type to retrieve

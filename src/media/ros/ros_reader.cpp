@@ -13,6 +13,7 @@
 #include "proc/temporal-filter.h"
 #include "proc/hole-filling-filter.h"
 #include "proc/zero-order.h"
+#include "proc/depth-smear.h"
 
 namespace librealsense
 {
@@ -1370,6 +1371,8 @@ namespace librealsense
             zo_point_x = std::make_shared<const_value_option>("", zo_opt_x_val);
             zo_point_y = std::make_shared<const_value_option>("", zo_opt_y_val);
             return std::make_shared<ExtensionToType<RS2_EXTENSION_ZERO_ORDER_FILTER>::type>(zo_point_x, zo_point_y);
+        case RS2_EXTENSION_DEPTH_SMEAR_FILTER:
+            return std::make_shared<ExtensionToType<RS2_EXTENSION_DEPTH_SMEAR_FILTER>::type>();
         default:
             return nullptr;
         }

@@ -27,6 +27,7 @@
 #include "proc/decimation-filter.h"
 #include "proc/spatial-filter.h"
 #include "proc/zero-order.h"
+#include "proc/depth-smear.h"
 #include "proc/hole-filling-filter.h"
 #include "proc/yuy2rgb.h"
 #include "proc/rates-printer.h"
@@ -1171,7 +1172,7 @@ int rs2_is_processing_block_extendable_to(const rs2_processing_block* f, rs2_ext
     case RS2_EXTENSION_TEMPORAL_FILTER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::temporal_filter) != nullptr;
     case RS2_EXTENSION_HOLE_FILLING_FILTER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::hole_filling_filter) != nullptr;
     case RS2_EXTENSION_ZERO_ORDER_FILTER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::zero_order) != nullptr;
-  
+    case RS2_EXTENSION_DEPTH_SMEAR_FILTER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::depth_smear) != nullptr;
     default:
         return false;
     }
@@ -1945,6 +1946,14 @@ NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
 rs2_processing_block* rs2_create_zero_order_invalidation_block(rs2_error** error) BEGIN_API_CALL
 {
     auto block = std::make_shared<librealsense::zero_order>();
+
+    return new rs2_processing_block{ block };
+}
+NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
+
+rs2_processing_block* rs2_create_depth_smear_invalidation_block(rs2_error** error) BEGIN_API_CALL
+{
+    auto block = std::make_shared<librealsense::depth_smear>();
 
     return new rs2_processing_block{ block };
 }

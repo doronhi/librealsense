@@ -964,6 +964,40 @@ namespace rs2
         }
     };
 
+    class smear_invalidation : public filter
+    {
+        /**
+        * Create a depth smear fix filter
+        * The filter fixes the depth smear artifact
+        */
+        smear_invalidation() : filter(init())
+        {}
+
+        smear_invalidation(filter f) :filter(f)
+        {
+            rs2_error* e = nullptr;
+            if (!rs2_is_processing_block_extendable_to(f.get(), RS2_EXTENSION_DEPTH_SMEAR_FILTER, &e) && !e)
+            {
+                _block.reset();
+            }
+            error::handle(e);
+        }
+
+    private:
+        friend class context;
+
+        std::shared_ptr<rs2_processing_block> init()
+        {
+            rs2_error* e = nullptr;
+            auto block = std::shared_ptr<rs2_processing_block>(
+                rs2_create_depth_smear_invalidation_block(&e),
+                rs2_delete_processing_block);
+            error::handle(e);
+
+            return block;
+        }
+    };
+
     class hole_filling_filter : public filter
     {
     public:

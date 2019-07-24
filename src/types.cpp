@@ -176,6 +176,7 @@ namespace librealsense
             CASE(TEMPORAL_FILTER)
             CASE(HOLE_FILLING_FILTER)
             CASE(ZERO_ORDER_FILTER)
+            CASE(DEPTH_SMEAR_FILTER)
             CASE(RECOMMENDED_FILTERS)
             CASE(POSE)
             CASE(POSE_SENSOR)

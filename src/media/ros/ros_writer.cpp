@@ -8,6 +8,7 @@
 #include "proc/temporal-filter.h"
 #include "proc/hole-filling-filter.h"
 #include "proc/zero-order.h"
+#include "proc/depth-smear.h"
 #include "ros_writer.h"
 
 namespace librealsense
@@ -510,6 +511,7 @@ namespace librealsense
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_TEMPORAL_FILTER);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_HOLE_FILLING_FILTER);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_ZERO_ORDER_FILTER);
+        RETURN_IF_EXTENSION(block, RS2_EXTENSION_DEPTH_SMEAR_FILTER);
 
 #undef RETURN_IF_EXTENSION
 

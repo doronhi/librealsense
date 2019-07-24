@@ -13,6 +13,7 @@
 #include "proc/temporal-filter.h"
 #include "proc/hole-filling-filter.h"
 #include "proc/zero-order.h"
+#include "proc/depth-smear.h"
 #include <cstddef>
 #include "metadata-parser.h"
 
@@ -254,6 +255,7 @@ namespace librealsense
     {
         processing_blocks res;
         res.push_back(std::make_shared<zero_order>(zo_point_x, zo_point_y));
+        res.push_back(std::make_shared<depth_smear>());
         auto depth_standart = get_depth_recommended_proccesing_blocks();
         res.insert(res.end(), depth_standart.begin(), depth_standart.end());
         res.push_back(std::make_shared<threshold>());

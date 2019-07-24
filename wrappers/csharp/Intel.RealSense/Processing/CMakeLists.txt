@@ -13,7 +13,8 @@ target_sources(${LRS_DOTNET_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/Syncer.cs"
         "${CMAKE_CURRENT_LIST_DIR}/TemporalFilter.cs"
         "${CMAKE_CURRENT_LIST_DIR}/ZeroOrderInvalidationFilter.cs"
+        "${CMAKE_CURRENT_LIST_DIR}/DepthSmearInvalidationFilter.cs"
         "${CMAKE_CURRENT_LIST_DIR}/ProcessingBlockList.cs"
         "${CMAKE_CURRENT_LIST_DIR}/ThresholdFilter.cs"
-	"${CMAKE_CURRENT_LIST_DIR}/UnitsTransform.cs"
+    "${CMAKE_CURRENT_LIST_DIR}/UnitsTransform.cs"
 )

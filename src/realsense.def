@@ -179,6 +179,7 @@ EXPORTS
     rs2_create_rates_printer_block
     rs2_create_disparity_transform_block
     rs2_create_zero_order_invalidation_block
+    rs2_create_depth_smear_invalidation_block
     
     rs2_embedded_frames_count
     rs2_extract_frame
