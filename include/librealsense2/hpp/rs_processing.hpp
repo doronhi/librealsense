@@ -964,16 +964,17 @@ namespace rs2
         }
     };
 
-    class smear_invalidation : public filter
+    class depth_smear_invalidation : public filter
     {
+    public:
         /**
         * Create a depth smear fix filter
         * The filter fixes the depth smear artifact
         */
-        smear_invalidation() : filter(init())
+        depth_smear_invalidation() : filter(init())
         {}
 
-        smear_invalidation(filter f) :filter(f)
+        depth_smear_invalidation(filter f) :filter(f)
         {
             rs2_error* e = nullptr;
             if (!rs2_is_processing_block_extendable_to(f.get(), RS2_EXTENSION_DEPTH_SMEAR_FILTER, &e) && !e)

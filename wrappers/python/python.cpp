@@ -632,6 +632,7 @@ PYBIND11_MODULE(NAME, m) {
         .def(BIND_DOWNCAST(filter, temporal_filter))
         .def(BIND_DOWNCAST(filter, threshold_filter))
         .def(BIND_DOWNCAST(filter, zero_order_invalidation))
+        .def(BIND_DOWNCAST(filter, depth_smear_invalidation))
         .def("__nonzero__", &rs2::filter::operator bool); // No docstring in C++
     // get_queue?
     // is/as?
@@ -733,6 +734,10 @@ PYBIND11_MODULE(NAME, m) {
 
     py::class_<rs2::zero_order_invalidation, rs2::filter> zero_order_invalidation(m, "zero_order_invalidation", "Fixes the zero order artifact");
     zero_order_invalidation.def(py::init<>());
+    
+    py::class_<rs2::depth_smear_invalidation, rs2::filter> depth_smear_invalidation(m, "depth_smear_invalidation", "Fixes the depth smear artifact");
+    depth_smear_invalidation.def(py::init<>());
+    
 
     /* rs_export.hpp */
     // py::class_<rs2::save_to_ply, rs2::filter> save_to_ply(m, "save_to_ply"); // No docstring in C++
