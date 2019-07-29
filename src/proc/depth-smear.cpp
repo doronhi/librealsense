@@ -4,6 +4,7 @@
 #include "depth-smear.h"
 #include <iomanip>
 #include "l500/l500-depth.h"
+#include "canny.h"
 
 namespace librealsense
 {
@@ -12,12 +13,26 @@ namespace librealsense
         rs2_intrinsics intrinsics,
         const depth_smear_options& options)
     {
+        const int nx = intrinsics.width;
+        const int ny = intrinsics.height;
+
+        pixel_t *G = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+        pixel_t *Gx = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+        pixel_t *Gy = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+        uint8_t *ir_edge = (uint8_t*)malloc(nx * ny * sizeof(uint8_t));
+        canny_edge_detection(ir_data, ir_edge, nx, ny, 0.2f, 0.5f, 1.4142f, G, Gx, Gy);
+
         for (auto i = 0; i < intrinsics.height*intrinsics.width; i++)
         {
-            auto zero = (depth_data_in[i] > 0) && (i>(intrinsics.height/2)*intrinsics.width) && (i < (intrinsics.height / 2+40)*intrinsics.width);
+            //auto zero = (depth_data_in[i] > 0) && (i > (intrinsics.height / 2)*intrinsics.width) && (i < (intrinsics.height / 2 + 40)*intrinsics.width);
+            auto zero = (ir_edge[i] == 0);
 
             zero_pixel(i, zero);
         }
+        free(Gx);
+        free(Gy);
+        free(G);
+        free(ir_edge);
         return true;
     }
 
@@ -74,7 +89,8 @@ namespace librealsense
             (const uint8_t*)ir_frame.get_data(),
             [&](int index, bool zero)
         {
-            depth_output[index] = zero ? 0 : ((uint16_t*)depth_frame.get_data())[index];
+            //depth_output[index] = zero ? 0 : ((uint16_t*)depth_frame.get_data())[index];
+            depth_output[index] = zero ? 0 : 255*255;
 
             if (confidence_frame)
             {
