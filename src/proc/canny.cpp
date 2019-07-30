@@ -33,7 +33,8 @@
 // store negative values and normalize.
 
 // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
-void convolution(const pixel_t *in, pixel_t *out, const float *kernel,
+template<class T> 
+void convolution(const T *in, float *out, const float *kernel,
                  const int nx, const int ny, const int ksize_x, const int ksize_y,
                  const bool normalize)
 {
@@ -75,6 +76,12 @@ void convolution(const pixel_t *in, pixel_t *out, const float *kernel,
         }
 }
 
+void convolution_uc(const uint8_t *in, float *out, const float *kernel,
+    const int nx, const int ny, const int ksize_x, const int ksize_y,
+    const bool normalize)
+{
+    convolution(in, out, kernel, nx, ny, ksize_x, ksize_x, normalize);
+}
 /*
  * gaussianFilter:
  * http://www.songho.ca/dsp/cannyedge/cannyedge.html
@@ -258,11 +265,11 @@ void hysteresisThreshold(const pixel_t* in, pixel_t* out, const int nx, const in
 void canny_edge_detection(const uint8_t *in_img, uint8_t* out,
                           const int nx, const int ny,
                           const float lowThresh, const float highThresh,
-                          const float sigma, pixel_t *G, pixel_t *Gx, pixel_t *Gy)
+                          const float sigma)
 {
-    //pixel_t *G = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
-    //pixel_t *Gx = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
-    //pixel_t *Gy = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+    pixel_t *G = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+    pixel_t *Gx = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+    pixel_t *Gy = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
     pixel_t *nms = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
     pixel_t *in = (pixel_t*)malloc(nx * ny * sizeof(pixel_t));
 
@@ -286,7 +293,6 @@ void canny_edge_detection(const uint8_t *in_img, uint8_t* out,
     for (int i = 1; i < nx - 1; i++)
         for (int j = 1; j < ny - 1; j++) {
             const int c = i + nx * j;
-            // G[c] = abs(Gx[c]) + abs(Gy[c]);
             G[c] = (pixel_t)hypot(Gx[c], Gy[c]);
             if (G[c] > magmax)
             {
@@ -340,9 +346,9 @@ void canny_edge_detection(const uint8_t *in_img, uint8_t* out,
     for (int i = 0; i < nx*ny; i++)
         out[i] = MAX_BRIGHTNESS * (nms[i] != 0);
 
-    //free(Gx);
-    //free(Gy);
-    //free(G);
+    free(Gx);
+    free(Gy);
+    free(G);
     free(nms);
     free(in);
 }
