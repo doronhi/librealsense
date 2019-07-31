@@ -11,7 +11,7 @@ using namespace std;
 
 namespace librealsense
 {
-    void discard_low_gradients(const uint8_t * ir_data, uint8_t * ir_edge, const int nx, const int ny, uint8_t ir_grade_threshold, bool is_horizontal)
+    void discard_low_gradients(const uint8_t * ir_data, uint8_t * ir_edge, const int nx, const int ny, uint8_t ir_grad_threshold, bool is_horizontal)
     {
         //gaussian_filter(in, out, nx, ny, sigma);
 
@@ -23,9 +23,13 @@ namespace librealsense
                                      -2, 0, 2,
                                      -1, 0, 1 };
             convolution_uc(ir_data, G, kernel, nx, ny, 3, 3, false);
-            FILE* fout = fopen("Gx.bin", "wb");
-            fwrite(G, sizeof(G[0]), nx*ny, fout);
-            fclose(fout);
+#ifdef _SAVE_DBG_
+            {
+                FILE* fout = fopen("Gx.bin", "wb");
+                fwrite(G, sizeof(G[0]), nx*ny, fout);
+                fclose(fout);
+            }
+#endif
         }
         else
         {
@@ -33,15 +37,19 @@ namespace librealsense
                                      0, 0, 0,
                                     -1,-2,-1 };
             convolution_uc(ir_data, G, kernel, nx, ny, 3, 3, false);
-            FILE* fout = fopen("Gy.bin", "wb");
-            fwrite(G, sizeof(G[0]), nx*ny, fout);
-            fclose(fout);
+#ifdef _SAVE_DBG_
+            {
+                FILE* fout = fopen("Gy.bin", "wb");
+                fwrite(G, sizeof(G[0]), nx*ny, fout);
+                fclose(fout);
+            }
+#endif
         }
 
         // Discard threshold where gradient is too low
         for (int i = 0; i < nx*ny; i++)
         {
-            if (abs(G[i]) < ir_grade_threshold)
+            if (abs(G[i]) < ir_grad_threshold)
             {
                 ir_edge[i] = 0;
             }
@@ -82,6 +90,7 @@ namespace librealsense
                           const int nx, const int ny, const depth_smear_options& options, bool is_horizontal)
     {
         std::set<int> pixs2Check = findPixByNeighbor(ir_edge, nx, ny, options.neighborPix, is_horizontal);
+#ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("pixs2Check_before.bin", "wb");
             for (int idx : pixs2Check)
@@ -98,7 +107,7 @@ namespace librealsense
             fwrite(ir_data, sizeof(ir_data[0]), nx*ny, fout);
             fclose(fout);
         }
-
+#endif
         std::vector<int> pixs_not_check;
         for (int idx : pixs2Check)
         {
@@ -109,12 +118,14 @@ namespace librealsense
         {
             pixs2Check.erase(idx);
         }
+#ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("pixs2Check.bin", "wb");
             for (int idx : pixs2Check)
                 fwrite(&idx, sizeof(idx), 1, fout);
             fclose(fout);
         }
+#endif
         return pixs2Check;
     }
 
@@ -219,29 +230,34 @@ namespace librealsense
     {
         uint8_t *ir_edge = (uint8_t*)malloc(nx * ny * sizeof(uint8_t));
         memcpy(ir_edge, full_ir_edge, nx*ny * sizeof(uint8_t));
+#ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("ir_edge_before.bin", "wb");
             fwrite(ir_edge, sizeof(ir_edge[0]), nx*ny, fout);
             fclose(fout);
         }
-        discard_low_gradients(ir_data, ir_edge, nx, ny, options.ir_grade_threshold, true);
+#endif
+        discard_low_gradients(ir_data, ir_edge, nx, ny, options.ir_grad_threshold, true);
 
+#ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("ir_edge.bin", "wb");
             fwrite(ir_edge, sizeof(ir_edge[0]), nx*ny, fout);
             fclose(fout);
         }
-
+#endif
         // Condition #3
         bool* pixs2Check = new bool[nx*ny]{ false };
         std::set<int> idx_to_invalid;
         std::set<int> idx_to_check = setPixelsToCheck(depth_data_in, ir_data, ir_edge, nx, ny, options, is_horizontal);
+#ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("idx_to_check.bin", "wb");
             for (int idx : idx_to_check)
                 fwrite(&idx, sizeof(idx), 1, fout);
             fclose(fout);
         }
+#endif
         for (int crnt_idx : idx_to_check)
         {
             int x = crnt_idx % nx;
@@ -260,12 +276,14 @@ namespace librealsense
             }
         }
         delete[] pixs2Check;
+#ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("idx_to_invalid.bin", "wb");
             for (int idx : idx_to_invalid)
                 fwrite(&idx, sizeof(idx), 1, fout);
             fclose(fout);
         }
+#endif
         return idx_to_invalid;
     }
 
@@ -294,20 +312,128 @@ namespace librealsense
         //for (auto i = 0; i < intrinsics.height*intrinsics.width; i++)
         //{
         //    auto zero = (ir_edge[i] == 0);
-        //    zero_pixel(i, zero);
+        //    if (zero)
+        //        zero_pixel(i);
         //}
         delete[] ir_edge;
         return true;
     }
 
+    enum depth_smear_invalidation_options
+    {
+        RS2_OPTION_FILTER_DS_IR_GRAD_THRESHOLD = static_cast<rs2_option>(RS2_OPTION_COUNT + 0), /**< min IR gradient to consider an edge valid */
+        RS2_OPTION_FILTER_DS_IR_THRESHOLD = static_cast<rs2_option>(RS2_OPTION_COUNT + 1),      /**< min IR value to invalidate by filter */
+        RS2_OPTION_FILTER_DS_NEIGHBOUR_PIX = static_cast<rs2_option>(RS2_OPTION_COUNT + 2),     /**< number of pixels from edge to check for invalidation */
+        RS2_OPTION_FILTER_DS_DZ_AROUND_EDGE = static_cast<rs2_option>(RS2_OPTION_COUNT + 3),    /**< min depth difference around edge to be considered for invalidation */
+        RS2_OPTION_FILTER_DS_DZ_IN_NEIGHBOUR = static_cast<rs2_option>(RS2_OPTION_COUNT + 4),   /**< min depth difference to neighbour pixel for invalidation */
+    };
+
+
     depth_smear::depth_smear()
         : generic_processing_block("Depth Smear Fix")
     {
+        // Set option ir_grad_threshold:
+        string option_name(get_option_name(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_IR_GRAD_THRESHOLD)));
+        auto ir_grad_threshold = std::make_shared<ptr_option<uint8_t>>(
+            0,
+            255,
+            1,
+            DS_IR_GRAD_THRESHOLD,
+            &_options.ir_grad_threshold,
+            option_name);
+        ir_grad_threshold->on_set([ir_grad_threshold, option_name](float val)
+        {
+            if (!ir_grad_threshold->is_valid(val))
+                throw invalid_value_exception(to_string()
+                    << "Unsupported " << option_name << ". " << val << " is out of range.");
+        });
+        register_option(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_IR_GRAD_THRESHOLD), ir_grad_threshold);
+
+        // Set option ir_threshold:
+        option_name = get_option_name(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_IR_THRESHOLD));
+        auto ir_threshold = std::make_shared<ptr_option<uint8_t>>(
+            0,
+            255,
+            1,
+            DS_IR_THRESHOLD,
+            &_options.ir_threshold,
+            option_name);
+        ir_threshold->on_set([ir_threshold, option_name](float val)
+        {
+            if (!ir_threshold->is_valid(val))
+                throw invalid_value_exception(to_string()
+                    << "Unsupported " << option_name << ". " << val << " is out of range.");
+        });
+        register_option(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_IR_THRESHOLD), ir_threshold);
+
+        // Set option neighborPix:
+        option_name = get_option_name(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_NEIGHBOUR_PIX));
+        auto neighborPix = std::make_shared<ptr_option<uint8_t>>(
+            0,
+            255,
+            1,
+            DS_NEIGHBOR_PIX,
+            &_options.neighborPix,
+            option_name);
+        neighborPix->on_set([neighborPix, option_name](float val)
+        {
+            if (!neighborPix->is_valid(val))
+                throw invalid_value_exception(to_string()
+                    << "Unsupported " << option_name << ". " << val << " is out of range.");
+        });
+        register_option(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_NEIGHBOUR_PIX), neighborPix);
+
+        // Set option dz_around_edge_th:
+        option_name = get_option_name(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_DZ_AROUND_EDGE));
+        auto dz_around_edge_th = std::make_shared<ptr_option<uint16_t>>(
+            0,
+            255*255,
+            1,
+            DS_DZ_AROUND_EDGE_TH,
+            &_options.dz_around_edge_th,
+            option_name);
+        dz_around_edge_th->on_set([dz_around_edge_th, option_name](float val)
+        {
+            if (!dz_around_edge_th->is_valid(val))
+                throw invalid_value_exception(to_string()
+                    << "Unsupported " << option_name << ". " << val << " is out of range.");
+        });
+        register_option(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_DZ_AROUND_EDGE), dz_around_edge_th);
+
+        // Set option dz_in_neighborPix_th:
+        option_name = get_option_name(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_DZ_IN_NEIGHBOUR));
+        auto dz_in_neighborPix_th = std::make_shared<ptr_option<uint16_t>>(
+            0,
+            255 * 255,
+            1,
+            DS_DZ_IN_NEIGHBOR_PIX_TH,
+            &_options.dz_in_neighborPix_th,
+            option_name);
+        dz_in_neighborPix_th->on_set([dz_in_neighborPix_th, option_name](float val)
+        {
+            if (!dz_in_neighborPix_th->is_valid(val))
+                throw invalid_value_exception(to_string()
+                    << "Unsupported " << option_name << ". " << val << " is out of range.");
+        });
+        register_option(static_cast<rs2_option>(RS2_OPTION_FILTER_DS_DZ_IN_NEIGHBOUR), dz_in_neighborPix_th);
     }
 
     const char* depth_smear::get_option_name(rs2_option option) const
     {
-        return "No Options Yet";
+        switch (option)
+        {
+        case depth_smear_invalidation_options::RS2_OPTION_FILTER_DS_IR_GRAD_THRESHOLD:
+            return "IR-gradient Threshold";
+        case depth_smear_invalidation_options::RS2_OPTION_FILTER_DS_IR_THRESHOLD:
+            return "IR Threshold";
+        case depth_smear_invalidation_options::RS2_OPTION_FILTER_DS_NEIGHBOUR_PIX:
+            return "Num Neighbours";
+        case depth_smear_invalidation_options::RS2_OPTION_FILTER_DS_DZ_AROUND_EDGE:
+            return "edge DZ";
+        case depth_smear_invalidation_options::RS2_OPTION_FILTER_DS_DZ_IN_NEIGHBOUR:
+            return "neighbour DZ";
+        }
+        return options_container::get_option_name(option);
     }
 
     rs2::frame depth_smear::process_frame(const rs2::frame_source& source, const rs2::frame& f)
@@ -341,6 +467,18 @@ namespace librealsense
         }
         auto depth_intrinsics = depth_frame.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
 
+        //{
+        //    // Debug : read image from file:
+        //    FILE* fin = fopen("C:\\projects\\librealsense\\build\\depth_data_in.bin", "rb");
+        //    fread((void*)depth_frame.get_data(), sizeof(uint16_t), depth_intrinsics.width*depth_intrinsics.height, fin);
+        //    fclose(fin);
+        //}
+        //{
+        //    FILE* fin = fopen("C:\\projects\\librealsense\\build\\ir_data.bin", "rb");
+        //    fread((void*)ir_frame.get_data(), sizeof(uint8_t), depth_intrinsics.width*depth_intrinsics.height, fin);
+        //    fclose(fin);
+        //}
+
         auto depth_output = (uint16_t*)depth_out.get_data();
         memcpy(depth_output, (const uint16_t*)depth_frame.get_data(), depth_intrinsics.width*depth_intrinsics.height * sizeof(uint16_t));
         //memset(depth_output, 0, depth_intrinsics.width*depth_intrinsics.height * sizeof(uint16_t));
@@ -349,6 +487,7 @@ namespace librealsense
         if (confidence_frame)
         {
             confidence_output = (uint8_t*)confidence_out.get_data();
+            memcpy(confidence_output, (const uint8_t*)confidence_frame.get_data(), depth_intrinsics.width*depth_intrinsics.height * sizeof(uint8_t));
         }
 
         if (depth_smear_invalidation((const uint16_t*)depth_frame.get_data(),

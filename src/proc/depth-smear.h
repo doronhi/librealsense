@@ -7,7 +7,7 @@
 #include "synthetic-stream.h"
 #include "option.h"
 
-#define DS_IR_GRADE_THRESHOLD 180
+#define DS_IR_GRAD_THRESHOLD 180
 #define DS_IR_THRESHOLD 190
 #define DS_NEIGHBOR_PIX 8
 #define DS_DZ_AROUND_EDGE_TH 45
@@ -19,14 +19,14 @@ namespace librealsense
     {
         // params = struct('IR_grad_thresh', 180, 'ir_thresh', 190, 'neighborPix', 8, 'dz_around_edge_th', 45, 'dz_in_neighborPix_th', 100);
         depth_smear_options() :
-            ir_grade_threshold(DS_IR_GRADE_THRESHOLD),
+            ir_grad_threshold(DS_IR_GRAD_THRESHOLD),
             ir_threshold(DS_IR_THRESHOLD),
             neighborPix(DS_NEIGHBOR_PIX),
             dz_around_edge_th(DS_DZ_AROUND_EDGE_TH),
             dz_in_neighborPix_th(DS_DZ_IN_NEIGHBOR_PIX_TH)
         {}
 
-        uint8_t                 ir_grade_threshold;
+        uint8_t                 ir_grad_threshold;
         uint8_t                 ir_threshold;
         uint8_t                 neighborPix;
         uint16_t                dz_around_edge_th;
