@@ -35,8 +35,8 @@
 // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
 template<class T> 
 void convolution(const T *in, float *out, const float *kernel,
-                 const int nx, const int ny, const int ksize_x, const int ksize_y,
-                 const bool normalize)
+    const int nx, const int ny, const int ksize_x, const int ksize_y,
+    const bool normalize)
 {
     // assert(kn % 2 == 1);
     // assert(nx > kn && ny > kn);
@@ -118,7 +118,7 @@ void convolution_uc(const uint8_t *in, float *out, const float *kernel,
 //	free(kernel);
 //}
 
-void gradient(const float* f, const size_t n, float* g)
+void gradient(const std::vector<float> f, const size_t n, std::vector<float>& g)
 {
     if (n > 1)
     {
@@ -134,79 +134,117 @@ void gradient(const float* f, const size_t n, float* g)
     }
 }
 
-void smoothGradient(const pixel_t *in, pixel_t *GX, pixel_t* GY, 
-                    const int nx, const int ny, const float sigma)
+void Canny::create_kernel()
 {
-    const int n = (int)ceil(4 * sigma);
-    const float c = 1 / (sqrtf(2 * (float)M_PI)*sigma);
-    const int kernel_size = (n * 2) + 1;
-    float* kernel = (float*)malloc(kernel_size * sizeof(float));
+    const int n = (int)ceil(4 * _sigma);
+    const float c = 1 / (sqrtf(2 * (float)M_PI)*_sigma);
+    _kernel_size = (n * 2) + 1;
+    //float* kernel = (float*)malloc(kernel_size * sizeof(float));
+    _kernel.resize(_kernel_size);
+    _dkernel.resize(_kernel_size);
     float kernel_sum(0);
     for (int x = -n; x <= n; x++)
     {
         int i(x + n);
-        kernel[i] = c * exp(-(x*x) / (2 * sigma*sigma));
-        kernel_sum += kernel[i];
+        _kernel[i] = c * exp(-(x*x) / (2 * _sigma*_sigma));
+        kernel_sum += _kernel[i];
     }
-    
+
     // Normalize to ensure kernel sums to one
-    for (int i = 0; i < kernel_size; i++)
-        kernel[i] /= kernel_sum;
+    for (int i = 0; i < _kernel_size; i++)
+        _kernel[i] /= kernel_sum;
 
     // Create 1 - D Derivative of Gaussian Kernel
-    float* dkernel = (float*)malloc(kernel_size * sizeof(float));
-    gradient(kernel, kernel_size, dkernel);
+    //float* dkernel = (float*)malloc(kernel_size * sizeof(float));
+    gradient(_kernel, _kernel_size, _dkernel);
 
     //// Normalize to ensure kernel sums to zero
     float neg_sum(0), pos_sum(0);
-    for (int i = 0; i < kernel_size; i++)
+    for (int i = 0; i < _kernel_size; i++)
     {
-        if (dkernel[i] > 0)
-            pos_sum += dkernel[i];
+        if (_dkernel[i] > 0)
+            pos_sum += _dkernel[i];
         else
-            neg_sum += dkernel[i];
+            neg_sum += _dkernel[i];
     }
     //neg_sum *= -1;
     pos_sum *= -1;  // Flip dkernel to match flipped image regarding to matlab.
-    for (int i = 0; i < kernel_size; i++)
+    for (int i = 0; i < _kernel_size; i++)
     {
-        if (dkernel[i] > 0)
-            dkernel[i] /= pos_sum;
+        if (_dkernel[i] > 0)
+            _dkernel[i] /= pos_sum;
         else
-            dkernel[i] /= neg_sum;
+            _dkernel[i] /= neg_sum;
     }
+}
+
+void Canny::smoothGradients()
+{
 
     //float* GK = (float*)calloc(kernel_size*kernel_size, sizeof(float));
     //for (int i = 0; i < kernel_size; i++)
     //    GK[i*kernel_size + n] = kernel[i];
 
-    int buf_size = nx * ny * sizeof(pixel_t);
-    pixel_t* tempbuf = (pixel_t*)malloc(buf_size);
+    int buf_size = _nx * _ny * sizeof(pixel_t);
+    //pixel_t* tempbuf = (pixel_t*)malloc(buf_size);
 
-    convolution(in, GX, kernel, nx, ny, 1, kernel_size, false);
-    memcpy(tempbuf, GX, buf_size);
-    convolution(tempbuf, GX, dkernel, nx, ny, kernel_size, 1, false);
+    convolution(_in.data(), _Gx.data(), _kernel.data(), _nx, _ny, 1, _kernel_size, false);
+    //{
+    //    FILE* fout = fopen("in.bin", "wb");
+    //    fwrite(_in.data(), sizeof(pixel_t), _nx*_ny, fout);
+    //    fclose(fout);
+    //}
+    //{
+    //    FILE* fout = fopen("kernel.bin", "wb");
+    //    fwrite(_kernel.data(), sizeof(pixel_t), 13, fout);
+    //    fclose(fout);
+    //}
+    //{
+    //    FILE* fout = fopen("gx.bin", "wb");
+    //    fwrite(_Gx.data(), sizeof(pixel_t), _nx*_ny, fout);
+    //    fclose(fout);
+    //}
 
-    convolution(in, GY, kernel, nx, ny, kernel_size, 1, false);
-    memcpy(tempbuf, GY, buf_size);
-    convolution(tempbuf, GY, dkernel, nx, ny, 1, kernel_size, false);
+    memcpy(_conv_buf.data(), _Gx.data(), buf_size);
+    //{
+    //    FILE* fout = fopen("buf.bin", "wb");
+    //    fwrite(_conv_buf.data(), sizeof(pixel_t), _nx*_ny, fout);
+    //    fclose(fout);
+    //}
+    //memcpy(tempbuf, GX, buf_size);
+    //{
+    //    FILE* fout = fopen("dkernel.bin", "wb");
+    //    fwrite(_dkernel.data(), sizeof(pixel_t), 13, fout);
+    //    fclose(fout);
+    //}
+    convolution(_conv_buf.data(), _Gx.data(), _dkernel.data(), _nx, _ny, _kernel_size, 1, false);
+    //{
+    //    FILE* fout = fopen("gx.bin", "wb");
+    //    fwrite(_Gx.data(), sizeof(pixel_t), _nx*_ny, fout);
+    //    fclose(fout);
+    //}
 
+    convolution(_in.data(), _Gy.data(), _kernel.data(), _nx, _ny, _kernel_size, 1, false);
+    memcpy(_conv_buf.data(), _Gy.data(), buf_size);
+    convolution(_conv_buf.data(), _Gy.data(), _dkernel.data(), _nx, _ny, 1, _kernel_size, false);
+
+    const int n((_kernel_size - 1) / 2);
     // Remove kernel size boundaries:
-    memset(GX, 0, nx*n * sizeof(pixel_t));
-    memset(GX + (ny - n)*nx, 0, nx*n * sizeof(pixel_t));
-    memset(GY, 0, nx*n*sizeof(pixel_t));
-    memset(GY + (ny - n)*nx, 0, nx*n * sizeof(pixel_t));
-    for (int i = n; i < ny - n; i++)
+    memset(_Gx.data(), 0, _nx*n * sizeof(pixel_t));                     // Erase top n rows.
+    memset(_Gx.data() + (_ny - n)*_nx, 0, _nx*n * sizeof(pixel_t));     // Erase bottom n rows.
+    memset(_Gy.data(), 0, _nx*n*sizeof(pixel_t));                       // Erase top n rows.
+    memset(_Gy.data() + (_ny - n)*_nx, 0, _nx*n * sizeof(pixel_t));     // Erase bottom n rows.
+    for (int i = n; i < _ny - n; i++)                                    // Erase n left and right columns.
     {
-        memset(GX + i * nx, 0, n * sizeof(pixel_t));
-        memset(GX + i * nx + (nx - n - 1), 0, n * sizeof(pixel_t));
-        memset(GY + i * nx, 0, n * sizeof(pixel_t));
-        memset(GY + i * nx + (nx - n - 1), 0, n * sizeof(pixel_t));
+        memset(_Gx.data() + i * _nx, 0, n * sizeof(pixel_t));
+        memset(_Gx.data() + i * _nx + (_nx - n - 1), 0, n * sizeof(pixel_t));
+        memset(_Gy.data() + i * _nx, 0, n * sizeof(pixel_t));
+        memset(_Gy.data() + i * _nx + (_nx - n - 1), 0, n * sizeof(pixel_t));
     }
 
-    free(tempbuf);
-    free(kernel);
-    free(dkernel);
+    //free(tempbuf);
+    //free(kernel);
+    //free(dkernel);
 }
 
 #ifndef __NO_COMPILE__
@@ -223,9 +261,9 @@ void smoothGradient(const pixel_t *in, pixel_t *GX, pixel_t* GY,
 
 // Tracing edges with hysteresis . Non-recursive implementation.
 // return original values on traces.
-void hysteresisThreshold(const pixel_t* in, pixel_t* out, const int nx, const int ny, const pixel_t lowThresh, const pixel_t highThresh)
+void Canny::hysteresisThreshold(const std::vector<pixel_t> in, std::vector<pixel_t>& out, const int nx, const int ny, const pixel_t lowThresh, const pixel_t highThresh)
 {
-    memset(out, 0, sizeof(pixel_t) * nx * ny);
+    std::fill(out.begin(), out.end(), 0.0f);
     int *edges = (int*)calloc(nx * ny, sizeof(int));
     size_t c = 1;
     for (int j = 1; j < ny - 1; j++)
@@ -233,11 +271,11 @@ void hysteresisThreshold(const pixel_t* in, pixel_t* out, const int nx, const in
             if (in[c] >= highThresh && out[c] == 0) { // trace edges
                 out[c] = in[c];
                 int nedges = 1;
-                edges[0] = (int)c;
+                _hys_edges[0] = (int)c;
 
                 do {
                     nedges--;
-                    const int t = edges[nedges];
+                    const int t = _hys_edges[nedges];
 
                     int nbs[8]; // neighbours
                     nbs[0] = t - nx;     // nn
@@ -252,60 +290,83 @@ void hysteresisThreshold(const pixel_t* in, pixel_t* out, const int nx, const in
                     for (int k = 0; k < 8; k++)
                         if (in[nbs[k]] >= lowThresh && out[nbs[k]] == 0) {
                             out[nbs[k]] = in[nbs[k]];
-                            edges[nedges] = nbs[k];
+                            _hys_edges[nedges] = nbs[k];
                             nedges++;
                         }
                 } while (nedges > 0);
             }
             c++;
         }
-    free(edges);
 }
 
-void canny_edge_detection(const uint8_t *in_img, uint8_t* out,
-                          const int nx, const int ny,
-                          const float lowThresh, const float highThresh,
-                          const float sigma)
+void Canny::init_buffers()
 {
-    pixel_t *G = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
-    pixel_t *Gx = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
-    pixel_t *Gy = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
-    pixel_t *nms = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
-    pixel_t *in = (pixel_t*)malloc(nx * ny * sizeof(pixel_t));
+    _G.resize(_nx*_ny);
+    _Gx.resize(_nx*_ny);
+    _Gy.resize(_nx*_ny);
+    _nms.resize(_nx*_ny);
+    _in.resize(_nx*_ny);
+    _conv_buf.resize(_nx*_ny);
+    _hys_edges.resize(_nx*_ny);
+}
 
-    if (G == NULL || Gx == NULL || Gy == NULL ||
-        nms == NULL || out == NULL || in == NULL ) {
-        fprintf(stderr, "canny_edge_detection:"
-                " Failed memory allocation(s).\n");
-        exit(1);
-    }
+void Canny::set_zero_buffers()
+{
+    std::fill(_G.begin(), _G.end(), 0.0f);
+    std::fill(_Gx.begin(), _Gx.end(), 0.0f);
+    std::fill(_Gy.begin(), _Gy.end(), 0.0f);
+    std::fill(_nms.begin(), _nms.end(), 0.0f);
+    std::fill(_hys_edges.begin(), _hys_edges.end(), 0);
+}
 
-    // Copy in_img from uint8_t to pixel_t (range 0-1):
-    for (int i = 0; i < nx*ny; i++)
-    {
-        in[i] = in_img[i] / 255.0f;
-    }
-
-    smoothGradient(in, Gx, Gy, nx, ny, sigma);
-
+void Canny::unite_gradients()
+{
     pixel_t magmax(0);
     int max_i, max_j;
-    for (int i = 1; i < nx - 1; i++)
-        for (int j = 1; j < ny - 1; j++) {
-            const int c = i + nx * j;
-            G[c] = (pixel_t)hypot(Gx[c], Gy[c]);
-            if (G[c] > magmax)
+    for (int i = 1; i < _nx - 1; i++)
+        for (int j = 1; j < _ny - 1; j++) {
+            const int c = i + _nx * j;
+            _G[c] = (pixel_t)hypot(_Gx[c], _Gy[c]);
+            if (_G[c] > magmax)
             {
-                magmax = G[c];
+                magmax = _G[c];
                 max_i = i;
                 max_j = j;
             }
         }
+    for (int i = 0; i < _nx*_ny; i++)
+        _G[i] /= magmax;
+}
+
+void Canny::canny_edge_detection(const uint8_t *in_img, std::vector<uint8_t>& out,
+                          const int nx, const int ny,
+                          const float lowThresh, const float highThresh,
+                          const float sigma)
+{
+    if (_nx != nx || _ny != ny)
+    {
+        _nx = nx;
+        _ny = ny;
+        init_buffers();
+    }
+    if (_sigma || sigma)
+    {
+        _sigma = sigma;
+        create_kernel();
+    }
+    set_zero_buffers();
+
+    // Copy in_img from uint8_t to pixel_t (range 0-1):
     for (int i = 0; i < nx*ny; i++)
-        G[i] /= magmax;
+    {
+        _in[i] = in_img[i] / (float)MAX_BRIGHTNESS;
+    }
+
+    smoothGradients();  // calc _Gx, _Gy
+    unite_gradients();  // calc _G
+
 
     // thinAndThreshold(Gx, Gy, G, lowThresh, highThresh, out);
-
     // Non-maximum suppression, straightforward implementation.
     for (int i = 1; i < nx - 1; i++)
         for (int j = 1; j < ny - 1; j++) {
@@ -319,38 +380,46 @@ void canny_edge_detection(const uint8_t *in_img, uint8_t* out,
             const int sw = ss + 1;
             const int se = ss - 1;
 
-            const float dir = (float)(fmod(atan2(Gy[c],
-                                                 Gx[c]) + M_PI,
+            const float dir = (float)(fmod(atan2(_Gy[c],
+                                                 _Gx[c]) + M_PI,
                                            M_PI) / M_PI) * 8;
 
-            if (((dir <= 1 || dir > 7) && G[c] > G[ee] &&
-                 G[c] > G[ww]) || // 0 deg
-                ((dir > 1 && dir <= 3) && G[c] > G[nw] &&
-                 G[c] > G[se]) || // 45 deg
-                ((dir > 3 && dir <= 5) && G[c] > G[nn] &&
-                 G[c] > G[ss]) || // 90 deg
-                ((dir > 5 && dir <= 7) && G[c] > G[ne] &&
-                 G[c] > G[sw]))   // 135 deg
-                nms[c] = G[c];
+            if (((dir <= 1 || dir > 7) && _G[c] > _G[ee] &&
+                 _G[c] > _G[ww]) || // 0 deg
+                ((dir > 1 && dir <= 3) && _G[c] > _G[nw] &&
+                 _G[c] > _G[se]) || // 45 deg
+                ((dir > 3 && dir <= 5) && _G[c] > _G[nn] &&
+                 _G[c] > _G[ss]) || // 90 deg
+                ((dir > 5 && dir <= 7) && _G[c] > _G[ne] &&
+                 _G[c] > _G[sw]))   // 135 deg
+                _nms[c] = _G[c];
             else
-                nms[c] = 0;
+                _nms[c] = 0;
         }
 
     // Reuse array
     // used as a stack. nx*ny/2 elements should be enough.
     //int *edges = (int*) Gy;
-
-    hysteresisThreshold(nms, in, nx, ny, lowThresh, lowThresh);     // use in as temporary buffer.
-    hysteresisThreshold(in, nms, nx, ny, lowThresh, highThresh);    // use nms as temporary buffer.
+    //{
+    //    FILE* fout = fopen("nms.bin", "wb");
+    //    fwrite(_nms.data(), sizeof(_nms[0]), nx*ny, fout);
+    //    fclose(fout);
+    //}
+    //{
+    //    FILE* fout = fopen("Gy.bin", "wb");
+    //    fwrite(_Gy.data(), sizeof(pixel_t), nx*ny, fout);
+    //    fclose(fout);
+    //}
+    //{
+    //    FILE* fout = fopen("G.bin", "wb");
+    //    fwrite(_G.data(), sizeof(pixel_t), nx*ny, fout);
+    //    fclose(fout);
+    //}
+    hysteresisThreshold(_nms, _in, nx, ny, lowThresh, lowThresh);     // use in as temporary buffer.
+    hysteresisThreshold(_in, _nms, nx, ny, lowThresh, highThresh);    // use nms as temporary buffer.
 
     for (int i = 0; i < nx*ny; i++)
-        out[i] = MAX_BRIGHTNESS * (nms[i] != 0);
-
-    free(Gx);
-    free(Gy);
-    free(G);
-    free(nms);
-    free(in);
+        out[i] = MAX_BRIGHTNESS * (_nms[i] != 0);
 }
 
 #endif // __NO_COMPILE__

@@ -4,29 +4,30 @@
 #include "depth-smear.h"
 #include <iomanip>
 #include "l500/l500-depth.h"
-#include "canny.h"
 #include <algorithm>
 
 using namespace std;
-
+// #define _SAVE_DBG_
 namespace librealsense
 {
-    void discard_low_gradients(const uint8_t * ir_data, uint8_t * ir_edge, const int nx, const int ny, uint8_t ir_grad_threshold, bool is_horizontal)
+    void depth_smear::discard_low_gradients(bool is_horizontal)
     {
         //gaussian_filter(in, out, nx, ny, sigma);
+        const int nx(_imsize.x), ny(_imsize.y);
 
-        pixel_t *G = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+        //pixel_t *G = (pixel_t*)calloc(nx * ny, sizeof(pixel_t));
+        std::fill(_temp_G.begin(), _temp_G.end(), 0.0f);
 
         if (is_horizontal)
         {
             const float kernel[] = { -1, 0, 1,
                                      -2, 0, 2,
                                      -1, 0, 1 };
-            convolution_uc(ir_data, G, kernel, nx, ny, 3, 3, false);
+            convolution_uc(_ir_data, _temp_G.data(), kernel, nx, ny, 3, 3, false);
 #ifdef _SAVE_DBG_
             {
                 FILE* fout = fopen("Gx.bin", "wb");
-                fwrite(G, sizeof(G[0]), nx*ny, fout);
+                fwrite(_temp_G.data(), sizeof(_temp_G[0]), nx*ny, fout);
                 fclose(fout);
             }
 #endif
@@ -36,11 +37,11 @@ namespace librealsense
             const float kernel[] = { 1, 2, 1,
                                      0, 0, 0,
                                     -1,-2,-1 };
-            convolution_uc(ir_data, G, kernel, nx, ny, 3, 3, false);
+            convolution_uc(_ir_data, _temp_G.data(), kernel, nx, ny, 3, 3, false);
 #ifdef _SAVE_DBG_
             {
                 FILE* fout = fopen("Gy.bin", "wb");
-                fwrite(G, sizeof(G[0]), nx*ny, fout);
+                fwrite(_temp_G.data(), sizeof(_temp_G[0]), nx*ny, fout);
                 fclose(fout);
             }
 #endif
@@ -49,22 +50,24 @@ namespace librealsense
         // Discard threshold where gradient is too low
         for (int i = 0; i < nx*ny; i++)
         {
-            if (abs(G[i]) < ir_grad_threshold)
+            if (abs(_temp_G[i]) < _options.ir_grad_threshold)
             {
-                ir_edge[i] = 0;
+                _temp_ir_edge[i] = 0;
             }
         }
-        free(G);
+        //free(G);
     }
 
-    std::set<int> findPixByNeighbor(const uint8_t * ir_edge, const int nx, const int ny, uint8_t neighborPix, bool is_horizontal)
+    std::set<int> depth_smear::findPixByNeighbor(bool is_horizontal)
     {
+        const int nx(_imsize.x), ny(_imsize.y);
+        uint8_t neighborPix(_options.neighborPix);
         std::set<int> pixs2Check;
         for (int y = 0; y < ny; y++)
         {
             for (int x = 0; x < nx; x++)
             {
-                if (ir_edge[y*nx + x] > 0)
+                if (_temp_ir_edge[y*nx + x] > 0)
                 {
                     if (is_horizontal)
                     {
@@ -86,11 +89,11 @@ namespace librealsense
         return pixs2Check;
     }
 
-    std::set<int> setPixelsToCheck(const uint16_t * depth_data_in, const uint8_t * ir_data, const uint8_t * ir_edge,
-                          const int nx, const int ny, const depth_smear_options& options, bool is_horizontal)
+    std::set<int> depth_smear::setPixelsToCheck(bool is_horizontal)
     {
-        std::set<int> pixs2Check = findPixByNeighbor(ir_edge, nx, ny, options.neighborPix, is_horizontal);
+        std::set<int> pixs2Check = findPixByNeighbor(is_horizontal);
 #ifdef _SAVE_DBG_
+        const int nx(_imsize.x), ny(_imsize.y);
         {
             FILE* fout = fopen("pixs2Check_before.bin", "wb");
             for (int idx : pixs2Check)
@@ -99,19 +102,19 @@ namespace librealsense
         }
         {
             FILE* fout = fopen("depth_data_in.bin", "wb");
-            fwrite(depth_data_in, sizeof(depth_data_in[0]), nx*ny, fout);
+            fwrite(_depth_data, sizeof(_depth_data[0]), nx*ny, fout);
             fclose(fout);
         }
         {
             FILE* fout = fopen("ir_data.bin", "wb");
-            fwrite(ir_data, sizeof(ir_data[0]), nx*ny, fout);
+            fwrite(_ir_data, sizeof(_ir_data[0]), nx*ny, fout);
             fclose(fout);
         }
 #endif
         std::vector<int> pixs_not_check;
         for (int idx : pixs2Check)
         {
-            if ((depth_data_in[idx] == 0) || (ir_data[idx] >= options.ir_threshold))
+            if ((_depth_data[idx] == 0) || (_ir_data[idx] >= _options.ir_threshold))
                 pixs_not_check.push_back(idx);
         }
         for (int idx : pixs_not_check)
@@ -129,21 +132,21 @@ namespace librealsense
         return pixs2Check;
     }
 
-    void calcDzAroundClosestEdge(const uint16_t * depth_data_in, const int x, const int y, const uint8_t *ir_edge, const int nx, const int ny,
-        bool is_horizontal, uint8_t& dz_around_edge,int& closestEdgeIx)
+    void depth_smear::calcDzAroundClosestEdge(const int x, const int y, bool is_horizontal, uint8_t& dz_around_edge,int& closestEdgeIx)
     {
+        const int nx(_imsize.x), ny(_imsize.y);
         int sizeOfAxisDir;
         if (is_horizontal)
         {
             sizeOfAxisDir = nx;
             for (int i = 0; i < nx; i++)
             {
-                if (x - i > 0 && ir_edge[y*nx + x - i] > 0)
+                if (x - i > 0 && _temp_ir_edge[y*nx + x - i] > 0)
                 {
                     closestEdgeIx = x - i;
                     break;
                 }
-                if (x + i < nx && ir_edge[y*nx + x + i] > 0)
+                if (x + i < nx && _temp_ir_edge[y*nx + x + i] > 0)
                 {
                     closestEdgeIx = x + i;
                     break;
@@ -155,12 +158,12 @@ namespace librealsense
             sizeOfAxisDir = ny;
             for (int i = 0; i < ny; i++)
             {
-                if (y - i > 0 && ir_edge[(y-i)*nx + x] > 0)
+                if (y - i > 0 && _temp_ir_edge[(y-i)*nx + x] > 0)
                 {
                     closestEdgeIx = y - i;
                     break;
                 }
-                if (y + i < ny && ir_edge[(y+i)*nx + x] > 0)
+                if (y + i < ny && _temp_ir_edge[(y+i)*nx + x] > 0)
                 {
                     closestEdgeIx = y + i;
                     break;
@@ -171,18 +174,19 @@ namespace librealsense
         int afterEdgeIx = min(sizeOfAxisDir, closestEdgeIx + 1);
         if (is_horizontal)
         {
-            dz_around_edge = abs(depth_data_in[y*nx + afterEdgeIx] - depth_data_in[y*nx + beforEdgeIx]);
+            dz_around_edge = abs(_depth_data[y*nx + afterEdgeIx] - _depth_data[y*nx + beforEdgeIx]);
         }
         else
         {
-            dz_around_edge = abs(depth_data_in[afterEdgeIx*nx + x] - depth_data_in[beforEdgeIx*nx + x]);
+            dz_around_edge = abs(_depth_data[afterEdgeIx*nx + x] - _depth_data[beforEdgeIx*nx + x]);
         }
     }
 
     // Need to know if in the neighbouring pixels, any of the depth is nan and what is the index of max depth (ignoring nans)
-    int calcDepthFromEdge(const uint16_t * depth_data_in, const int x, const int y, const uint8_t * ir_data, const int nx, const int ny,
-        bool is_horizontal, const int closestEdgeIx, const uint8_t neighborPix)
+    int depth_smear::calcDepthFromEdge(const int x, const int y, bool is_horizontal, const int closestEdgeIx)
     {
+        const int nx(_imsize.x), ny(_imsize.y);
+        const uint8_t neighborPix(_options.neighborPix);
         int end_idx, dir_sign;
         if (is_horizontal)
         {
@@ -190,7 +194,7 @@ namespace librealsense
             dir_sign = (dx_from_edge < 0) ? -1 : 1;
             if (dx_from_edge == 0)
             {
-                dir_sign = (ir_data[y*nx + min(x + 2, nx)] > ir_data[y*nx + max(x - 2, 1)]) ? -1 : 1;
+                dir_sign = (_ir_data[y*nx + min(x + 2, nx)] > _ir_data[y*nx + max(x - 2, 1)]) ? -1 : 1;
             }
             end_idx = min(max(x + dir_sign * (neighborPix - abs(dx_from_edge)), 1), nx);
             end_idx = y * nx + end_idx;
@@ -201,7 +205,7 @@ namespace librealsense
             dir_sign = (dx_from_edge < 0) ? -1 : 1;
             if (dx_from_edge == 0)
             {
-                dir_sign = (ir_data[min(y+2, ny)*nx + x] > ir_data[max(y-2, 1)*nx + x]) ? -1 : 1;
+                dir_sign = (_ir_data[min(y+2, ny)*nx + x] > _ir_data[max(y-2, 1)*nx + x]) ? -1 : 1;
             }
             end_idx = min(max(y + dir_sign * (neighborPix - abs(dx_from_edge)), 1), ny);
             dir_sign *= nx;
@@ -211,45 +215,47 @@ namespace librealsense
         uint16_t max_depth(0);
         for (int idx = y * nx + x; idx != end_idx; idx += dir_sign)
         {
-            if (depth_data_in[idx] == 0)
+            if (_depth_data[idx] == 0)
             {
                 max_depth_idx = -2;
                 break;
             }
-            if (depth_data_in[idx] > max_depth)
+            if (_depth_data[idx] > max_depth)
             {
-                max_depth = depth_data_in[idx];
+                max_depth = _depth_data[idx];
                 max_depth_idx = idx;
             }
         }
         return max_depth_idx;
     }
 
-    std::set<int> invalid_smear_dir(const uint16_t * depth_data_in, const uint8_t * ir_data, uint8_t * full_ir_edge, const int nx, const int ny,
-                           const depth_smear_options& options, bool is_horizontal)
+    //std::set<int> invalid_smear_dir(const uint16_t * depth_data_in, const uint8_t * ir_data, uint8_t * full_ir_edge, const int nx, const int ny,
+    //    const depth_smear_options& options, bool is_horizontal)
+    std::set<int> depth_smear::invalid_smear_dir(bool is_horizontal)
     {
-        uint8_t *ir_edge = (uint8_t*)malloc(nx * ny * sizeof(uint8_t));
-        memcpy(ir_edge, full_ir_edge, nx*ny * sizeof(uint8_t));
+        const int nx(_imsize.x), ny(_imsize.y);
+
+        //uint8_t *ir_edge = (uint8_t*)malloc(nx * ny * sizeof(uint8_t));
+        memcpy(_temp_ir_edge.data(), _ir_edge.data(), nx*ny * sizeof(uint8_t));
 #ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("ir_edge_before.bin", "wb");
-            fwrite(ir_edge, sizeof(ir_edge[0]), nx*ny, fout);
+            fwrite(_temp_ir_edge.data(), sizeof(_temp_ir_edge[0]), nx*ny, fout);
             fclose(fout);
         }
 #endif
-        discard_low_gradients(ir_data, ir_edge, nx, ny, options.ir_grad_threshold, true);
+        discard_low_gradients(is_horizontal);   // remove from _temp_ir_edge
 
 #ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("ir_edge.bin", "wb");
-            fwrite(ir_edge, sizeof(ir_edge[0]), nx*ny, fout);
+            fwrite(_temp_ir_edge.data(), sizeof(_temp_ir_edge[0]), nx*ny, fout);
             fclose(fout);
         }
 #endif
         // Condition #3
-        bool* pixs2Check = new bool[nx*ny]{ false };
         std::set<int> idx_to_invalid;
-        std::set<int> idx_to_check = setPixelsToCheck(depth_data_in, ir_data, ir_edge, nx, ny, options, is_horizontal);
+        std::set<int> idx_to_check = setPixelsToCheck(is_horizontal);
 #ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("idx_to_check.bin", "wb");
@@ -265,17 +271,16 @@ namespace librealsense
 
             uint8_t dz_around_edge;
             int closestEdgeIx;
-            calcDzAroundClosestEdge(depth_data_in, x, y, ir_edge, nx, ny, is_horizontal, dz_around_edge, closestEdgeIx);
-            if (dz_around_edge > options.dz_around_edge_th) //Condition #4 - if the depth is consistent with IR, no need to invalidate
+            calcDzAroundClosestEdge(x, y, is_horizontal, dz_around_edge, closestEdgeIx);
+            if (dz_around_edge > _options.dz_around_edge_th) //Condition #4 - if the depth is consistent with IR, no need to invalidate
                 continue;
             // Need to know if in the neighbouring pixels, any of the depth is nan and what is the index of max depth (ignoring nans)
-            int max_depth_idx = calcDepthFromEdge(depth_data_in, x, y, ir_data, nx, ny, is_horizontal, closestEdgeIx, options.neighborPix);
-            if (max_depth_idx < 0 || (abs(depth_data_in[max_depth_idx]-depth_data_in[crnt_idx]) > options.dz_in_neighborPix_th && ir_data[crnt_idx] < ir_data[max_depth_idx]))
+            int max_depth_idx = calcDepthFromEdge(x, y, is_horizontal, closestEdgeIx);
+            if (max_depth_idx < 0 || (abs(_depth_data[max_depth_idx]-_depth_data[crnt_idx]) > _options.dz_in_neighborPix_th && _ir_data[crnt_idx] < _ir_data[max_depth_idx]))
             {
                 idx_to_invalid.insert(crnt_idx);
             }
         }
-        delete[] pixs2Check;
 #ifdef _SAVE_DBG_
         {
             FILE* fout = fopen("idx_to_invalid.bin", "wb");
@@ -288,17 +293,18 @@ namespace librealsense
     }
 
     template<class T>
-    bool depth_smear_invalidation(const uint16_t * depth_data_in, const uint8_t * ir_data, T zero_pixel,
+    bool depth_smear::depth_smear_invalidation(const uint16_t * depth_data_in, const uint8_t * ir_data, T zero_pixel,
         rs2_intrinsics intrinsics,
         const depth_smear_options& options)
     {
-        const int nx = intrinsics.width;
-        const int ny = intrinsics.height;
+        //const int nx = intrinsics.width;
+        //const int ny = intrinsics.height;
 
-        uint8_t *ir_edge = new uint8_t[nx * ny];
-        canny_edge_detection(ir_data, ir_edge, nx, ny, 0.2f, 0.5f, 1.4142f);
-        std::set<int> idx_to_invalid = invalid_smear_dir(depth_data_in, ir_data, ir_edge, nx, ny, options, true);
-        std::set<int> idx_to_invalid_y = invalid_smear_dir(depth_data_in, ir_data, ir_edge, nx, ny, options, false);
+        //uint8_t *ir_edge = new uint8_t[nx * ny];
+        
+        _canny.canny_edge_detection(_ir_data, _ir_edge, _imsize.x, _imsize.y, 0.2f, 0.5f, 1.4142f);
+        std::set<int> idx_to_invalid = invalid_smear_dir(true);
+        std::set<int> idx_to_invalid_y = invalid_smear_dir(false);
         for (int idx : idx_to_invalid_y)
         {
             idx_to_invalid.insert(idx);
@@ -315,7 +321,7 @@ namespace librealsense
         //    if (zero)
         //        zero_pixel(i);
         //}
-        delete[] ir_edge;
+        //delete[] ir_edge;
         return true;
     }
 
@@ -489,6 +495,18 @@ namespace librealsense
             confidence_output = (uint8_t*)confidence_out.get_data();
             memcpy(confidence_output, (const uint8_t*)confidence_frame.get_data(), depth_intrinsics.width*depth_intrinsics.height * sizeof(uint8_t));
         }
+
+        if (depth_intrinsics.width != _imsize.x || depth_intrinsics.height != _imsize.y)
+        {
+            _imsize.x = depth_intrinsics.width;
+            _imsize.y = depth_intrinsics.height;
+            _ir_edge.resize(_imsize.x*_imsize.y);
+            _ir_data = (const uint8_t*)ir_frame.get_data();
+            _depth_data = (const uint16_t*)depth_frame.get_data();
+            _temp_ir_edge.resize(_imsize.x*_imsize.y);
+            _temp_G.resize(_imsize.x*_imsize.y);
+        }
+
 
         if (depth_smear_invalidation((const uint16_t*)depth_frame.get_data(),
             (const uint8_t*)ir_frame.get_data(),
