@@ -38,8 +38,6 @@ void convolution(const T *in, float *out, const float *kernel,
     const int nx, const int ny, const int ksize_x, const int ksize_y,
     const bool normalize)
 {
-    // assert(kn % 2 == 1);
-    // assert(nx > kn && ny > kn);
     const int khalf_x = ksize_x / 2;
     const int khalf_y = ksize_y / 2;
     float min = FLT_MAX, max = -FLT_MAX;
@@ -82,41 +80,6 @@ void convolution_uc(const uint8_t *in, float *out, const float *kernel,
 {
     convolution(in, out, kernel, nx, ny, ksize_x, ksize_x, normalize);
 }
-/*
- * gaussianFilter:
- * http://www.songho.ca/dsp/cannyedge/cannyedge.html
- * determine size of kernel (odd #)
- * 0.0 <= sigma < 0.5 : 3
- * 0.5 <= sigma < 1.0 : 5
- * 1.0 <= sigma < 1.5 : 7
- * 1.5 <= sigma < 2.0 : 9
- * 2.0 <= sigma < 2.5 : 11
- * 2.5 <= sigma < 3.0 : 13 ...
- * kernelSize = 2 * int(2*sigma) + 3;
- */
-//void gaussian_filter(const pixel_t *in, pixel_t *out,
-//                     const int nx, const int ny, const float sigma)
-//{
-//    const int n = 2 * (int)(2 * sigma) + 3;
-//    const float mean = (float)floor(n / 2.0);
-//    //float kernel[n * n]; // variable length array
-//	float* kernel = (float*)malloc(n * n * sizeof(float));
-//
-//    fprintf(stderr, "gaussian_filter: kernel size %d, sigma=%g\n",
-//            n, sigma);
-//    size_t c = 0;
-//    for (int i = 0; i < n; i++)
-//        for (int j = 0; j < n; j++) {
-//			kernel[c] = expf(-0.5f * (powf((i - mean) / sigma, 2.0f) +
-//                                    powf((j - mean) / sigma, 2.0f)))
-//                        / (2 * (float)M_PI * sigma * sigma);
-//            fprintf(stderr, "%g, ", kernel[c]);
-//            c++;
-//        }
-//
-//    convolution(in, out, kernel, nx, ny, n, true);
-//	free(kernel);
-//}
 
 void gradient(const std::vector<float> f, const size_t n, std::vector<float>& g)
 {
@@ -139,7 +102,6 @@ void Canny::create_kernel()
     const int n = (int)ceil(4 * _sigma);
     const float c = 1 / (sqrtf(2 * (float)M_PI)*_sigma);
     _kernel_size = (n * 2) + 1;
-    //float* kernel = (float*)malloc(kernel_size * sizeof(float));
     _kernel.resize(_kernel_size);
     _dkernel.resize(_kernel_size);
     float kernel_sum(0);
@@ -155,7 +117,6 @@ void Canny::create_kernel()
         _kernel[i] /= kernel_sum;
 
     // Create 1 - D Derivative of Gaussian Kernel
-    //float* dkernel = (float*)malloc(kernel_size * sizeof(float));
     gradient(_kernel, _kernel_size, _dkernel);
 
     //// Normalize to ensure kernel sums to zero
@@ -167,7 +128,6 @@ void Canny::create_kernel()
         else
             neg_sum += _dkernel[i];
     }
-    //neg_sum *= -1;
     pos_sum *= -1;  // Flip dkernel to match flipped image regarding to matlab.
     for (int i = 0; i < _kernel_size; i++)
     {
@@ -180,50 +140,48 @@ void Canny::create_kernel()
 
 void Canny::smoothGradients()
 {
-
-    //float* GK = (float*)calloc(kernel_size*kernel_size, sizeof(float));
-    //for (int i = 0; i < kernel_size; i++)
-    //    GK[i*kernel_size + n] = kernel[i];
-
     int buf_size = _nx * _ny * sizeof(pixel_t);
-    //pixel_t* tempbuf = (pixel_t*)malloc(buf_size);
 
     convolution(_in.data(), _Gx.data(), _kernel.data(), _nx, _ny, 1, _kernel_size, false);
-    //{
-    //    FILE* fout = fopen("in.bin", "wb");
-    //    fwrite(_in.data(), sizeof(pixel_t), _nx*_ny, fout);
-    //    fclose(fout);
-    //}
-    //{
-    //    FILE* fout = fopen("kernel.bin", "wb");
-    //    fwrite(_kernel.data(), sizeof(pixel_t), 13, fout);
-    //    fclose(fout);
-    //}
-    //{
-    //    FILE* fout = fopen("gx.bin", "wb");
-    //    fwrite(_Gx.data(), sizeof(pixel_t), _nx*_ny, fout);
-    //    fclose(fout);
-    //}
+#ifdef _SAVE_DBG_
+    {
+        FILE* fout = fopen("in.bin", "wb");
+        fwrite(_in.data(), sizeof(pixel_t), _nx*_ny, fout);
+        fclose(fout);
+    }
+    {
+        FILE* fout = fopen("kernel.bin", "wb");
+        fwrite(_kernel.data(), sizeof(pixel_t), 13, fout);
+        fclose(fout);
+    }
+    {
+        FILE* fout = fopen("gx.bin", "wb");
+        fwrite(_Gx.data(), sizeof(pixel_t), _nx*_ny, fout);
+        fclose(fout);
+    }
+#endif
 
     memcpy(_conv_buf.data(), _Gx.data(), buf_size);
-    //{
-    //    FILE* fout = fopen("buf.bin", "wb");
-    //    fwrite(_conv_buf.data(), sizeof(pixel_t), _nx*_ny, fout);
-    //    fclose(fout);
-    //}
-    //memcpy(tempbuf, GX, buf_size);
-    //{
-    //    FILE* fout = fopen("dkernel.bin", "wb");
-    //    fwrite(_dkernel.data(), sizeof(pixel_t), 13, fout);
-    //    fclose(fout);
-    //}
+#ifdef _SAVE_DBG_
+    {
+        FILE* fout = fopen("buf.bin", "wb");
+        fwrite(_conv_buf.data(), sizeof(pixel_t), _nx*_ny, fout);
+        fclose(fout);
+    }
+    {
+        FILE* fout = fopen("dkernel.bin", "wb");
+        fwrite(_dkernel.data(), sizeof(pixel_t), 13, fout);
+        fclose(fout);
+    }
+#endif
     convolution(_conv_buf.data(), _Gx.data(), _dkernel.data(), _nx, _ny, _kernel_size, 1, false);
-    //{
-    //    FILE* fout = fopen("gx.bin", "wb");
-    //    fwrite(_Gx.data(), sizeof(pixel_t), _nx*_ny, fout);
-    //    fclose(fout);
-    //}
-
+#ifdef _SAVE_DBG_
+    {
+        FILE* fout = fopen("gx.bin", "wb");
+        fwrite(_Gx.data(), sizeof(pixel_t), _nx*_ny, fout);
+        fclose(fout);
+    }
+#endif
     convolution(_in.data(), _Gy.data(), _kernel.data(), _nx, _ny, _kernel_size, 1, false);
     memcpy(_conv_buf.data(), _Gy.data(), buf_size);
     convolution(_conv_buf.data(), _Gy.data(), _dkernel.data(), _nx, _ny, 1, _kernel_size, false);
@@ -241,10 +199,6 @@ void Canny::smoothGradients()
         memset(_Gy.data() + i * _nx, 0, n * sizeof(pixel_t));
         memset(_Gy.data() + i * _nx + (_nx - n - 1), 0, n * sizeof(pixel_t));
     }
-
-    //free(tempbuf);
-    //free(kernel);
-    //free(dkernel);
 }
 
 #ifndef __NO_COMPILE__
@@ -399,22 +353,23 @@ void Canny::canny_edge_detection(const uint8_t *in_img, std::vector<uint8_t>& ou
 
     // Reuse array
     // used as a stack. nx*ny/2 elements should be enough.
-    //int *edges = (int*) Gy;
-    //{
-    //    FILE* fout = fopen("nms.bin", "wb");
-    //    fwrite(_nms.data(), sizeof(_nms[0]), nx*ny, fout);
-    //    fclose(fout);
-    //}
-    //{
-    //    FILE* fout = fopen("Gy.bin", "wb");
-    //    fwrite(_Gy.data(), sizeof(pixel_t), nx*ny, fout);
-    //    fclose(fout);
-    //}
-    //{
-    //    FILE* fout = fopen("G.bin", "wb");
-    //    fwrite(_G.data(), sizeof(pixel_t), nx*ny, fout);
-    //    fclose(fout);
-    //}
+#ifdef _SAVE_DBG_
+    {
+        FILE* fout = fopen("nms.bin", "wb");
+        fwrite(_nms.data(), sizeof(_nms[0]), nx*ny, fout);
+        fclose(fout);
+    }
+    {
+        FILE* fout = fopen("Gy.bin", "wb");
+        fwrite(_Gy.data(), sizeof(pixel_t), nx*ny, fout);
+        fclose(fout);
+    }
+    {
+        FILE* fout = fopen("G.bin", "wb");
+        fwrite(_G.data(), sizeof(pixel_t), nx*ny, fout);
+        fclose(fout);
+    }
+#endif
     hysteresisThreshold(_nms, _in, nx, ny, lowThresh, lowThresh);     // use in as temporary buffer.
     hysteresisThreshold(_in, _nms, nx, ny, lowThresh, highThresh);    // use nms as temporary buffer.
 
