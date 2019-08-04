@@ -489,11 +489,11 @@ namespace librealsense
             _imsize.x = depth_intrinsics.width;
             _imsize.y = depth_intrinsics.height;
             _ir_edge.resize(_imsize.x*_imsize.y);
-            _ir_data = (const uint8_t*)ir_frame.get_data();
-            _depth_data = (const uint16_t*)depth_frame.get_data();
             _temp_ir_edge.resize(_imsize.x*_imsize.y);
             _temp_G.resize(_imsize.x*_imsize.y);
         }
+        _ir_data = (const uint8_t*)ir_frame.get_data();
+        _depth_data = (const uint16_t*)depth_frame.get_data();
 
         if (depth_smear_invalidation(_depth_data, _ir_data,
             [&](int index)
