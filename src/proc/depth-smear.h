@@ -53,7 +53,7 @@ namespace librealsense
         std::set<int> findPixByNeighbor(const std::vector<uint8_t>& ir_edge, bool is_horizontal);
         std::set<int> setPixelsToCheck(const std::vector<uint8_t>& ir_edge, bool is_horizontal);
         std::set<int> invalid_smear_dir(bool is_horizontal);
-        void discard_low_gradients(std::vector<uint8_t>& ir_edge, bool is_horizontal);
+        void discard_low_gradients(std::vector<uint8_t>* ir_edge, bool is_horizontal);
         void calcDzAroundClosestEdge(const int x, const int y, const std::vector<uint8_t>& ir_edge, bool is_horizontal, uint8_t& dz_around_edge, int& closestEdgeIx);
         int calcDepthFromEdge(const int x, const int y, bool is_horizontal, const int closestEdgeIx);
 

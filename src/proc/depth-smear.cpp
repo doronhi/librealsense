@@ -10,7 +10,7 @@ using namespace std;
 // #define _SAVE_DBG_
 namespace librealsense
 {
-    void depth_smear::discard_low_gradients(std::vector<uint8_t>& ir_edge, bool is_horizontal)
+    void depth_smear::discard_low_gradients(std::vector<uint8_t>* ir_edge, bool is_horizontal)
     {
         const int nx(_imsize.x), ny(_imsize.y);
 
@@ -50,7 +50,7 @@ namespace librealsense
         {
             if (abs(_temp_G[i]) < _options.ir_grad_threshold)
             {
-                ir_edge[i] = 0;
+                (*ir_edge)[i] = 0;
             }
         }
     }
@@ -238,7 +238,7 @@ namespace librealsense
             fclose(fout);
         }
 #endif
-        discard_low_gradients(_temp_ir_edge, is_horizontal);   // remove from _temp_ir_edge
+        discard_low_gradients(&_temp_ir_edge, is_horizontal);   // remove from _temp_ir_edge
 
 #ifdef _SAVE_DBG_
         {
