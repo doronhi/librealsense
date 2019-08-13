@@ -68,14 +68,14 @@ namespace librealsense
                 {
                     if (is_horizontal)
                     {
-                        for (int xx = max(0, x - (int)ceil(neighborPix / 2)); xx <= min(x + (int)ceil(neighborPix / 2), nx); xx++)
+                        for (int xx = max(0, x - (int)ceil(neighborPix / 2)); xx < min(x + (int)ceil(neighborPix / 2), nx); xx++)
                         {
                             pixs2Check.insert(y*nx + xx);
                         }
                     }
                     else
                     {
-                        for (int yy = max(0, y - (int)ceil(neighborPix / 2)); yy <= min(y + (int)ceil(neighborPix / 2), ny); yy++)
+                        for (int yy = max(0, y - (int)ceil(neighborPix / 2)); yy < min(y + (int)ceil(neighborPix / 2), ny); yy++)
                         {
                             pixs2Check.insert(yy*nx + x);
                         }
@@ -302,14 +302,6 @@ namespace librealsense
         {
             zero_pixel(idx);
         }
-
-
-        //for (auto i = 0; i < intrinsics.height*intrinsics.width; i++)
-        //{
-        //    auto zero = (ir_edge[i] == 0);
-        //    if (zero)
-        //        zero_pixel(i);
-        //}
         return true;
     }
 
@@ -461,13 +453,17 @@ namespace librealsense
         }
         auto depth_intrinsics = depth_frame.get_profile().as<rs2::video_stream_profile>().get_intrinsics();
 
+        //if (depth_intrinsics.width == 640 && depth_intrinsics.height == 480)
         //{
+        //    LOG_ERROR("read depth image");
         //    // Debug : read image from file:
         //    FILE* fin = fopen("C:\\projects\\librealsense\\build\\depth_data_in.bin", "rb");
         //    fread((void*)depth_frame.get_data(), sizeof(uint16_t), depth_intrinsics.width*depth_intrinsics.height, fin);
         //    fclose(fin);
         //}
+        //if (depth_intrinsics.width == 640 && depth_intrinsics.height == 480)
         //{
+        //    LOG_ERROR("read ir image");
         //    FILE* fin = fopen("C:\\projects\\librealsense\\build\\ir_data.bin", "rb");
         //    fread((void*)ir_frame.get_data(), sizeof(uint8_t), depth_intrinsics.width*depth_intrinsics.height, fin);
         //    fclose(fin);
@@ -475,7 +471,6 @@ namespace librealsense
 
         auto depth_output = (uint16_t*)depth_out.get_data();
         memcpy(depth_output, (const uint16_t*)depth_frame.get_data(), depth_intrinsics.width*depth_intrinsics.height * sizeof(uint16_t));
-        //memset(depth_output, 0, depth_intrinsics.width*depth_intrinsics.height * sizeof(uint16_t));
         uint8_t* confidence_output;
 
         if (confidence_frame)
