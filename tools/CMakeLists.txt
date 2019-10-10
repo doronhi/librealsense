@@ -17,6 +17,7 @@ add_subdirectory(fw-logger)
 add_subdirectory(terminal)
 add_subdirectory(recorder)
 add_subdirectory(fw-update)
+add_subdirectory(depth_color_auto_calibrate)
 
 if(BUILD_GRAPHICAL_EXAMPLES)
     include(${CMAKE_SOURCE_DIR}/CMake/opengl_config.cmake)
