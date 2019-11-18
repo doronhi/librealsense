@@ -54,7 +54,7 @@ namespace BT {
         //x: The Simplex
         int iterations = 1E5) {    //iteration step number
 
-        int N = init.size();                         //space dimension
+        size_t N = init.size();                         //space dimension
         const double a = 1.0, b = 1.0, g = 0.5, h = 0.5;   //coefficients
                                                    //a: reflection  -> xr  
                                                    //b: expansion   -> xe 
@@ -113,6 +113,14 @@ namespace BT {
             }
             //x1, xn, xnp1 are found
 
+            ////
+            cout << "x1 = ";
+            for (int i = 0; i < N; ++i)
+                cout << x[x1][i] << ",";
+            cout << endl;
+            cout << "max vf: " << vf[x1] << endl;
+            ////
+
             std::vector<D> xg(N, 0);//xg: centroid of the N best vertexes
             for (int i = 0; i < x.size(); ++i) {
                 if (i != xnp1)
@@ -130,6 +138,7 @@ namespace BT {
             for (int i = 0; i < N; ++i)
                 diff += fabs(xcentroid_old[i] - xcentroid_new[i]);
 
+            cout << "diff / N = " << diff / N << endl;
             if (diff / N < tol) break;              //terminate the optimizer
             else xcentroid_old.swap(xcentroid_new); //update simplex center
 

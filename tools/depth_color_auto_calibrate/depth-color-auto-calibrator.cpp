@@ -7,12 +7,15 @@
 #include <librealsense2/rs.hpp>
 #include "../include/librealsense2/rsutil.h"
 #include "simplex.h"
-
+#include <numeric>
 
 using namespace std;
 
+
 namespace librealsense
 {
+    const double SQRT_DBL_EPSILON = sqrt(std::numeric_limits<double>::epsilon());
+
     void SaveImage(string filename, char* image, size_t size)
     {
         ofstream fout(filename.c_str(), ios::binary);
@@ -27,6 +30,77 @@ namespace librealsense
         {
             gray[i] = static_cast<int> (round( (color[i * 3] * 0.299 + color[i * 3 + 1] * 0.587 + color[i * 3 + 2] * 0.114) ));
         }
+    }
+
+    float3x3 rotation_x(float theta)
+    {
+        float3x3 rot;
+        float sin_t = sinf(theta);
+        float cos_t = cosf(theta);
+        rot = { {1, 0, 0},
+                {0, cos_t, -sin_t},
+                {0, sin_t, cos_t} };
+        return rot;
+    }
+
+    float3x3 rotation_y(float theta)
+    {
+        float3x3 rot;
+        float sin_t = sinf(theta);
+        float cos_t = cosf(theta);
+        rot = { {cos_t, 0, sin_t},
+                {0, 1, 0},
+                {-sin_t, 0, cos_t} };
+        return rot;
+    }
+
+    float3x3 rotation_z(float theta)
+    {
+        float3x3 rot;
+        float sin_t = sinf(theta);
+        float cos_t = cosf(theta);
+        rot = { {cos_t, -sin_t, 0},
+                {sin_t, cos_t, 0},
+                {0, 0, 1} };
+        return rot;
+    }
+
+    /// Convert orientation angles stored in rodrigues conventions to rotation matrix
+    /// for details: http://mesh.brown.edu/en193s08-2003/notes/en193s08-rots.pdf
+    float3x3 calc_rotation_from_rodrigues_angles(const std::vector<double> rot)
+    {
+        assert(3 == rot.size());
+        float3x3 rot_mat{};
+
+        double theta = sqrt(std::inner_product(rot.begin(), rot.end(), rot.begin(), 0.0));
+        double r1 = rot[0], r2 = rot[1], r3 = rot[2];
+        if (theta <= SQRT_DBL_EPSILON) // identityMatrix
+        {
+            rot_mat(0, 0) = rot_mat(1, 1) = rot_mat(2, 2) = 1.0;
+            rot_mat(0, 1) = rot_mat(0, 2) = rot_mat(1, 0) = rot_mat(1, 2) = rot_mat(2, 0) = rot_mat(2, 1) = 0.0;
+        }
+        else
+        {
+            r1 /= theta;
+            r2 /= theta;
+            r3 /= theta;
+
+            double c = cos(theta);
+            double s = sin(theta);
+            double g = 1 - c;
+
+            rot_mat(0, 0) = float(c + g * r1 * r1);
+            rot_mat(0, 1) = float(g * r1 * r2 - s * r3);
+            rot_mat(0, 2) = float(g * r1 * r3 + s * r2);
+            rot_mat(1, 0) = float(g * r2 * r1 + s * r3);
+            rot_mat(1, 1) = float(c + g * r2 * r2);
+            rot_mat(1, 2) = float(g * r2 * r3 - s * r1);
+            rot_mat(2, 0) = float(g * r3 * r1 - s * r2);
+            rot_mat(2, 1) = float(g * r3 * r2 + s * r1);
+            rot_mat(2, 2) = float(c + g * r3 * r3);
+        }
+
+        return rot_mat;
     }
 
     template<typename T>
@@ -133,13 +207,37 @@ namespace librealsense
             //                     -0.0019467, 0.9999588, -0.0088643,
             //                      0.0024228, 0.0088690, 0.9999577 };    // +0.5 degree in X
 
-            float debug_rot[] = { 0.9999952, 0.0019251, -0.0024400,
-                                 -0.0020505, 0.9986202, -0.0524734,
-                                  0.0023356, 0.0524782, 0.9986193 };   // +3 degrees
+            //float debug_rot[] = { 0.9999952, 0.0019251, -0.0024400,
+            //                     -0.0020505, 0.9986202, -0.0524734,
+            //                      0.0023356, 0.0524782, 0.9986193 };   // +3 degrees
+
+
+            //float debug_rot[] = { 0.999995172, 0.00192511710, -0.00243999087,
+            //           -0.00192545913, 0.999998152, -0.000137818133,
+            //          0.00243972102, 0.000142515564, 0.999997020 }; // original
+
+            float3x3 aa = { {0, 1, 2},
+                            {3, 4, 5},
+                            {6, 7, 8} };
+            float3x3 bb = { {10, 11, 12},
+                            {13, 14, 15},
+                            {16, 17, 18} };
+            float3x3 cc = aa * bb;
+
+            std::vector<double> rot = { 0, 0, 3 };
+            float3x3 origin_rot = { {0.999995172, 0.00192511710, -0.00243999087},
+                                    {-0.00192545913, 0.999998152, -0.000137818133},
+                                    {0.00243972102, 0.000142515564, 0.999997020} };
+            // float3x3 rot_err = calc_rotation_from_rodrigues_angles(rot);
+            //float3x3 rot_err = rotation_x(0.0f) * rotation_y(0.0f) * rotation_z(deg2rad(3.0f));
+            float3x3 rot_err = rotation_z(deg2rad(3.0f)) * rotation_y(0.0f) * rotation_x(0.0f);
+            float3x3 debug_rot = origin_rot * rot_err;
+
+
 
             float debug_trn[] = { 0.0146882981, 0.000314516481, 0.000251281104 };   // original
 
-            memcpy(depth_to_other.rotation, debug_rot, 9 * sizeof(float));
+            memcpy(depth_to_other.rotation, &debug_rot, 9 * sizeof(float));
             // memcpy(depth_to_other.translation, debug_trn, 3 * sizeof(float));
         }
         depth.get_profile().as<rs2::video_stream_profile>().register_extrinsics_to(color_profile, depth_to_other);
@@ -207,7 +305,7 @@ namespace librealsense
         };
 
         std::vector< std::vector<float> > x;
-        std::vector<float> res_extrinsics = BT::Simplex(calc_grade_func, transformation, 1e-8f, x, 10000);
+        std::vector<float> res_extrinsics = BT::Simplex(calc_grade_func, transformation, 1e-5f, x, 10000);
         jc = CalculateExtrinsicsGrade(res_extrinsics);
         cout << "results: The objection function J given the GT input calibration (R,T) is: " << jc << endl;
 
