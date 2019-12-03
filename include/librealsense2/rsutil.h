@@ -14,6 +14,8 @@
 #include <stdint.h>
 #include <math.h>
 #include <float.h>
+#include <iostream>
+
 
 /* Given a point in 3D space, compute the corresponding pixel coordinates in an image with no distortion or forward distortion coefficients produced by the same camera */
 static void rs2_project_point_to_pixel(float pixel[2], const struct rs2_intrinsics * intrin, const float point[3])
@@ -211,6 +213,16 @@ static void rs2_project_color_pixel_to_depth_pixel(float to_pixel[2],
             to_pixel[1] = p[1];
         }
     }
+}
+
+static rs2_extrinsics rs2_create_extrinsics(const float* extrinsics, size_t extrinsics_size)
+{
+    if (extrinsics_size != 12)
+        throw std::runtime_error("Extrinsics size must be 12.");
+
+    rs2_extrinsics extrin = rs2_extrinsics();
+    memcpy(extrin.rotation, extrinsics, 12*sizeof(float));
+    return extrin;
 }
 
 #endif

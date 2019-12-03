@@ -26,7 +26,7 @@ int main(int argc, char * argv[])
     while (true)
     {
         rs2::frameset frameset = pipe.wait_for_frames();
-        bool is_ok = dcac.calibrate(frameset, fixed_depth_to_other);
+        //bool is_ok = dcac.old_calibrate(frameset, fixed_depth_to_other);
     }
     return 0;
 }

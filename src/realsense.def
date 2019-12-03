@@ -325,3 +325,10 @@ EXPORTS
     rs2_update_firmware_unsigned
     rs2_update_firmware_unsigned_cpp
     rs2_enter_update_state
+	rs2_depth_color_auto_calibrate
+	rs2_create_depth_color_calibrator
+	rs2_delete_depth_color_calibrator
+	rs2_dcc_set_frameset
+	rs2_dcc_prepare_images
+	rs2_dcc_calculate_grade
+	rs2_dcc_calibrate

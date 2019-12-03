@@ -39,6 +39,9 @@
 #include "software-device.h"
 #include "fw-update/fw-update-device-interface.h"
 #include "global_timestamp_reader.h"
+#include "utils/depth-color-auto-calibrator.h"
+#include "../include/librealsense2/h/rs_utils.h"
+
 
 ////////////////////////
 // API implementation //
@@ -2560,3 +2563,68 @@ void rs2_enter_update_state(const rs2_device* device, rs2_error** error) BEGIN_A
     fwud->enter_update_state();
 }
 HANDLE_EXCEPTIONS_AND_RETURN(, device)
+
+struct rs2_depth_color_calib : public rs2_options
+{
+    rs2_depth_color_calib(std::shared_ptr<librealsense::depth_color_calib> dcc)
+        : rs2_options((librealsense::options_interface*)dcc.get()),
+        dcc(dcc) { }
+
+    std::shared_ptr<librealsense::depth_color_calib> dcc;
+    rs2_depth_color_calib& operator=(const rs2_depth_color_calib&) = delete;
+    rs2_depth_color_calib(const rs2_depth_color_calib&) = delete;
+};
+
+void rs2_depth_color_auto_calibrate(rs2::frameset frameset, struct rs2_extrinsics * extrin, rs2_error** error) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL(extrin);
+    librealsense::depth_color_calib dcc(0.001f);
+    dcc.set_frameset(frameset);
+    dcc.prepare_images();
+    dcc.calibrate(extrin);
+}
+HANDLE_EXCEPTIONS_AND_RETURN(, extrin)
+
+rs2_depth_color_calib* rs2_create_depth_color_calibrator(rs2_error** error) BEGIN_API_CALL
+{
+    rs2_depth_color_calib* rdcc = new rs2_depth_color_calib(std::make_shared<librealsense::depth_color_calib>(0.001));
+    return rdcc;
+}
+NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
+
+void rs2_delete_depth_color_calibrator(rs2_depth_color_calib* rdcc)
+{
+    VALIDATE_NOT_NULL(rdcc);
+
+    delete rdcc;
+}
+
+void rs2_dcc_set_frameset(rs2_depth_color_calib* rdcc, rs2::frameset frameset, rs2_error** error) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL(rdcc);
+    rdcc->dcc->set_frameset(frameset);
+}
+HANDLE_EXCEPTIONS_AND_RETURN(, rdcc)
+
+void rs2_dcc_prepare_images(rs2_depth_color_calib* rdcc, rs2_error** error) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL(rdcc);
+    rdcc->dcc->prepare_images();
+}
+HANDLE_EXCEPTIONS_AND_RETURN(, rdcc)
+
+float rs2_dcc_calculate_grade(rs2_depth_color_calib* rdcc, std::vector<float> transformation, rs2_error** error) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL(rdcc);
+    return (rdcc->dcc->calculate_extrinsics_grade(transformation));
+}
+HANDLE_EXCEPTIONS_AND_RETURN(0.0f, rdcc)
+
+void rs2_dcc_calibrate(rs2_depth_color_calib* rdcc, struct rs2_extrinsics * extrin, rs2_error** error) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL(rdcc);
+    VALIDATE_NOT_NULL(extrin);
+    rdcc->dcc->calibrate(extrin);
+}
+HANDLE_EXCEPTIONS_AND_RETURN(, rdcc, extrin)
+

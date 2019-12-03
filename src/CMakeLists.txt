@@ -90,6 +90,7 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/types.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/verify.c"
         "${CMAKE_CURRENT_LIST_DIR}/frame-validator.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/utils/depth-color-auto-calibrator.cpp"
 
         "${CMAKE_CURRENT_LIST_DIR}/algo.h"
         "${CMAKE_CURRENT_LIST_DIR}/api.h"
@@ -118,4 +119,6 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/types.h"
         "${CMAKE_CURRENT_LIST_DIR}/command_transfer.h"
         "${CMAKE_CURRENT_LIST_DIR}/frame-validator.h"
+        "${CMAKE_CURRENT_LIST_DIR}/utils/depth-color-auto-calibrator.h"
+        "${CMAKE_CURRENT_LIST_DIR}/utils/simplex.h"
 )
