@@ -16,7 +16,7 @@ If it fails to install, please refer to [install prerequisites](https://www.npmj
 ## 1.1. Install Build Prerequisites
 
 ### Install Node.js
-The version should be at least v6.x and the releases can be found [here](https://nodejs.org/en/download/).
+The version should be at least v6.x and not more than v10.x. The releases can be found [here](https://nodejs.org/en/download/).
 
 #### Ubuntu 16.04
 In Ubuntu16.04, the default apt-get installed version is lower than v6.x. The following command could install the latest v6.x release:
