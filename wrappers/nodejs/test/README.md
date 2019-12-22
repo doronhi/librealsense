@@ -1,7 +1,7 @@
 # Nodejs Wrapper Tests
 
 # Installing node-librealsense #
-There are two ways to get node-librealsense module before testing: **install from npm** and **build from source**, both used **mocha** (`npm install mocha`) as test framework.
+There are two ways to get node-librealsense module before testing: **install from npm** and **build from source**, both used **mocha** (`npm install -g mocha`) as test framework.
 
 ## Install From Npm
 Used for feature validation in released node-librealsense module which updates bi-weekly.
