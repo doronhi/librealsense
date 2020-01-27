@@ -15,7 +15,16 @@
 #include <ctime>
 #include <algorithm>
 #include <librealsense2/rsutil.h>
+#include <fcntl.h>
+#include <semaphore.h>
 
+#ifdef _MSC_VER
+#include <processthreadsapi.h>
+#else
+#include <sys/types.h>
+#include <sys/syscall.h>
+#define GetCurrentThreadId() syscall(SYS_gettid)
+#endif
 using namespace rs2;
 
 TEST_CASE("Sync sanity", "[live][!mayfail]") {
@@ -399,6 +408,552 @@ TEST_CASE("Start-Stop stream sequence", "[live][using_pipeline]")
             REQUIRE_NOTHROW(pipe.stop());
         }
     }
+}
+
+rs2::device get_device(const rs2::device_list& dev_list)
+{
+    rs2::device dev;
+    if (dev_list.size() > 0)
+    {
+        auto start = std::chrono::system_clock::now();
+        try
+        {
+            //std::cout << GetCurrentThreadId() << ":4" << std::endl;
+
+            dev = dev_list[0]; // constructor of device
+            //std::cout << GetCurrentThreadId() << ":5" << std::endl;
+        }
+        catch (std::exception& ex)
+        {
+            //std::cout << GetCurrentThreadId() << ":6 :" << ex.what() << std::endl;
+        }
+        auto end = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end - start;
+        bool is_acquired(dev);
+        std::cout << GetCurrentThreadId() << ":Acquisition " << is_acquired << " after " << elapsed_seconds.count() << "(secs)" << std::endl;
+    }
+    return dev;
+}
+
+rs2::device get_device()
+{
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+    return get_device(dev_list);
+}
+
+bool is_get_device(const rs2::device_list& dev_list)
+{
+    bool is_acquired(get_device(dev_list));
+    return is_acquired;
+}
+
+bool is_get_device()
+{
+    bool is_acquired(get_device());
+    return is_acquired;
+}
+
+bool multiple_thread_get_device_ctx_info(size_t num_threads)
+{
+    // Require at least one device to be plugged in
+    std::vector<std::thread> workers;
+    std::vector<bool> results(num_threads, false);
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << "start test: " << i << std::endl;
+        workers.push_back(std::thread([&results, i]() 
+            {
+                rs2::device dev = get_device();
+                results[i] = bool(dev);
+                if (dev)
+                {
+                    auto sn = dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
+                    std::cout << "Device with serial number " << sn << " was found."<<std::endl;
+                    std::string pn = dev.get_info(RS2_CAMERA_INFO_PHYSICAL_PORT);
+                    std::string name = dev.get_info(RS2_CAMERA_INFO_NAME);
+                    std::cout << "Device with physical ID " << pn << " was found." << std::endl;
+                }
+            }));
+        // std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    size_t num_ok(0);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers[i].join();
+    }
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << i << " : " << results[i] << std::endl;
+        num_ok += static_cast<size_t>(results[i]);
+    }
+    return (num_ok == num_threads);
+}
+
+bool multiple_thread_get_device_info(size_t num_threads)
+{
+    // Require at least one device to be plugged in
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+
+    std::vector<std::thread> workers;
+    std::vector<bool> results(num_threads, false);
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << "start test: " << i << std::endl;
+        workers.push_back(std::thread([&results, dev_list, i]() 
+            {
+                rs2::device dev = get_device(dev_list);
+                results[i] = bool(dev);
+                if (dev)
+                {
+                    auto sn = dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
+                    std::cout << "Device with serial number " << sn << " was found."<<std::endl;
+                    std::string pn = dev.get_info(RS2_CAMERA_INFO_PHYSICAL_PORT);
+                    std::string name = dev.get_info(RS2_CAMERA_INFO_NAME);
+                    std::cout << "Device with physical ID " << pn << " was found." << std::endl;
+                }
+            }));
+        // std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    size_t num_ok(0);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers[i].join();
+    }
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << i << " : " << results[i] << std::endl;
+        num_ok += static_cast<size_t>(results[i]);
+    }
+    return (num_ok == num_threads);
+}
+
+
+bool multiple_thread_get_device(size_t num_threads)
+{
+    // Require at least one device to be plugged in
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+
+    std::vector<std::thread> workers;
+    std::vector<bool> results(num_threads, false);
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << "start test: " << i << std::endl;
+        workers.push_back(std::thread([&results, dev_list, i]() 
+            {
+                results[i] = is_get_device(dev_list);
+                // if (true)
+                // {
+                //     auto sn = dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
+                //     std::cout << "Device with serial number " << sn << " was found."<<std::endl;
+                //     std::string pn = dev.get_info(RS2_CAMERA_INFO_PHYSICAL_PORT);
+                //     std::string name = dev.get_info(RS2_CAMERA_INFO_NAME);
+                //     std::cout << "Device with physical ID " << pn << " was found." << std::endl;
+                // }
+            }));
+        // std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    size_t num_ok(0);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers[i].join();
+    }
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << i << " : " << results[i] << std::endl;
+        num_ok += static_cast<size_t>(results[i]);
+    }
+    return (num_ok == num_threads);
+}
+
+TEST_CASE("Multiple-Thread get_device 1", "[live]")
+{
+    REQUIRE(multiple_thread_get_device(1));
+}
+
+TEST_CASE("Multiple-Thread get_device 2", "[live]")
+{
+    REQUIRE(multiple_thread_get_device(2));
+}
+
+TEST_CASE("Multiple-Thread get_device 3", "[live]")
+{
+    REQUIRE(multiple_thread_get_device(3));
+}
+
+TEST_CASE("Multiple-Thread get_device 4", "[live]")
+{
+    REQUIRE(multiple_thread_get_device(4));
+}
+
+TEST_CASE("Multiple-Thread get_device 9", "[live]")
+{
+    REQUIRE(multiple_thread_get_device(9));
+}
+
+TEST_CASE("Reset Multiple-Thread get_device", "[live]")
+{
+    // Require at least one device to be plugged in
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+    REQUIRE(dev_list.size() > 0);
+    rs2::device dev = dev_list[0]; // constructor of device
+    std::cout << "Reset..." << std::endl;
+    dev.hardware_reset();
+    REQUIRE(multiple_thread_get_device(2));
+}
+
+TEST_CASE("Multiple-Thread get_device_info 1", "[live]")
+{
+    REQUIRE(multiple_thread_get_device_info(1));
+}
+
+TEST_CASE("Multiple-Thread get_device_info 2", "[live]")
+{
+    REQUIRE(multiple_thread_get_device_info(2));
+}
+
+TEST_CASE("Multiple-Thread get_device_info 3", "[live]")
+{
+    REQUIRE(multiple_thread_get_device_info(3));
+}
+
+TEST_CASE("Reset Multiple-Thread get_device_info", "[live]")
+{
+    // Require at least one device to be plugged in
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+    REQUIRE(dev_list.size() > 0);
+    rs2::device dev = dev_list[0]; // constructor of device
+    std::cout << "Reset..." << std::endl;
+    dev.hardware_reset();
+    REQUIRE(multiple_thread_get_device_info(2));
+}
+
+TEST_CASE("Multiple-Thread get_device_ctx_info 2", "[live]")
+{
+    REQUIRE(multiple_thread_get_device_ctx_info(2));
+}
+
+TEST_CASE("Reset Multiple-Thread get_device_ctx_info", "[live]")
+{
+    // Require at least one device to be plugged in
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+    REQUIRE(dev_list.size() > 0);
+    rs2::device dev = dev_list[0]; // constructor of device
+    std::cout << "Reset..." << std::endl;
+    dev.hardware_reset();
+    REQUIRE(multiple_thread_get_device_ctx_info(3));
+}
+
+
+TEST_CASE("single get_device", "[live]")
+{
+    // Require at least one device to be plugged in
+    std::cout << "1" << std::endl;
+    rs2::context ctx;
+    std::cout << "2" << std::endl;
+    device_list dev_list = ctx.query_devices();
+    std::cout << "3" << std::endl;
+    REQUIRE(is_get_device(dev_list));
+}
+
+TEST_CASE("single get_device info", "[live]")
+{
+    // Require at least one device to be plugged in
+    std::cout << "1" << std::endl;
+    rs2::context ctx;
+    std::cout << "2" << std::endl;
+    device_list dev_list = ctx.query_devices();
+    std::cout << "3" << std::endl;
+    rs2::device dev = get_device(dev_list);
+    REQUIRE(dev);
+    auto sn = dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
+    std::cout << "Device with serial number " << sn << " was found."<<std::endl;
+    std::string pn = dev.get_info(RS2_CAMERA_INFO_PHYSICAL_PORT);
+    std::string name = dev.get_info(RS2_CAMERA_INFO_NAME);
+    std::cout << "Device with physical ID " << pn << " was found." << std::endl;
+}
+
+TEST_CASE("Reset single get_device", "[live]")
+{
+    // Require at least one device to be plugged in
+    std::cout << "1" << std::endl;
+    rs2::context ctx;
+    std::cout << "2" << std::endl;
+    auto start = std::chrono::system_clock::now();
+    device_list dev_list = ctx.query_devices();
+    auto stop = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = stop - start;
+    std::cout << "query took " << elapsed_seconds.count() << " (secs)" << std::endl;
+    std::cout << "3" << std::endl;
+    REQUIRE(dev_list.size() > 0);
+    rs2::device dev = dev_list[0]; // constructor of device
+    std::cout << "Reset..." << std::endl;
+    dev.hardware_reset();
+    start = std::chrono::system_clock::now();
+
+    //std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::cout << "3.5" << std::endl;
+    dev_list = ctx.query_devices();
+    stop = std::chrono::system_clock::now();
+    elapsed_seconds = stop - start;
+    std::cout << "Reset took " << elapsed_seconds.count() << " (secs)" << std::endl;
+    std::cout << "3.6" << std::endl;
+    REQUIRE(dev_list.size() > 0);
+    std::cout << "3.7" << std::endl;
+
+    REQUIRE(is_get_device(dev_list));
+}
+
+std::string hexify(unsigned char n)
+{
+    std::string res;
+
+    do
+    {
+        res += "0123456789ABCDEF"[n % 16];
+        n >>= 4;
+    } while (n);
+
+    reverse(res.begin(), res.end());
+
+    if (res.size() == 1)
+    {
+        res.insert(0, "0");
+    }
+
+    return res;
+}
+
+bool get_gvd(rs2::device dev)
+{
+    std::vector<uint8_t> input;
+    // auto str_op_code = dev.get_info(RS2_CAMERA_INFO_DEBUG_OP_CODE);
+    // auto op_code = static_cast<uint8_t>(std::stoi(str_op_code));
+    uint8_t gvd_code = 0x10;
+    input = { 0x14, 0x00, 0xab, 0xcd, gvd_code, 0x00, 0x00, 0x00,
+             0xf4, 0x01, 0x00, 0x00, 0x00,    0x00, 0x00, 0x00,
+             0x00, 0x00, 0x00, 0x00, 0x00,    0x00, 0x00, 0x00 };
+    
+    //std::cout << "Device Name: " << dev.get_info(RS2_CAMERA_INFO_NAME) << std::endl;
+    //std::cout << "Device Location: " << dev.get_info(RS2_CAMERA_INFO_PHYSICAL_PORT) << std::endl << std::endl;
+
+    setvbuf(stdout, NULL, _IONBF, 0); // unbuffering stdout
+
+    std::cout << GetCurrentThreadId() << ": " << "start" << std::endl;
+    auto start = std::chrono::system_clock::now();
+    auto raw_data = dev.as<debug_protocol>().send_and_receive_raw_data(input);
+    auto stop = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = stop - start;
+    std::cout << GetCurrentThreadId() << ": " << "stop: " << elapsed_seconds.count() << " (secs)" << std::endl;
+    bool is_ok(true);
+    if (raw_data.size() <= 4)
+    {
+        std::cout << GetCurrentThreadId() << ":" << "Error: raw_data.size() <= 4:\n";
+        is_ok = false;
+    }
+    else
+    {
+        for (int i = 0; i < 4; i++)
+            is_ok &= (input[i+4] == raw_data[i]);
+    }
+
+    if (!is_ok)
+    {
+        std::cout << GetCurrentThreadId() << ":" << "Command: (size: " << input.size() << ")\n";
+        for (size_t i = 0; i < input.size(); ++i)
+            std::cout << hexify(input[i]) << " ";
+        std::cout << std::endl;
+        std::cout << GetCurrentThreadId() << ":" << "End Command:\n";
+
+        std::cout << GetCurrentThreadId() << ":" << "Results: (size: " << raw_data.size() << ")\n";
+        for (size_t i = 0; i < raw_data.size(); ++i)
+            std::cout << hexify(raw_data[i]) << " ";
+        std::cout << std::endl;
+        std::cout << GetCurrentThreadId() << ":" << "End Results:\n";
+    }
+    return is_ok;
+}
+
+bool multiple_device_gvd(rs2::device dev, size_t num_threads)
+{
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool ready(false);
+    
+    std::vector<std::thread> workers;
+    std::vector<bool> results(num_threads, false);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers.push_back(std::thread([&results, dev, i, &cv, &mtx, &ready]()
+        {
+            std::cout << "start test: " << i << std::endl;
+            {
+                std::unique_lock<std::mutex> lck(mtx);
+                //std::cout << "worker going to wait:" << i << std::endl;
+                while (!ready) {
+                    //std::cout << "worker wait:" << i << std::endl;
+                    cv.wait(lck);
+                    //std::cout << "worker unlocked:" << i << std::endl;
+                }
+            }
+            std::cout << "go test: " << i << std::endl;
+            results[i] = get_gvd(dev);
+            std::cout << "done test: " << i << std::endl;
+        }));
+        // std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    std::cout << "GO ALL TESTS!" << std::endl;
+    {
+        std::unique_lock<std::mutex> lck(mtx);
+        ready = true;
+        cv.notify_all();
+    }
+
+    size_t num_ok(0);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers[i].join();
+    }
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << i << " : " << results[i] << std::endl;
+        num_ok += static_cast<size_t>(results[i]);
+    }
+    return (num_ok == num_threads);
+}
+
+TEST_CASE("hw_monitor 2", "[live]")
+{
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+    rs2::device dev = get_device(dev_list);
+    REQUIRE(dev);
+    REQUIRE(multiple_device_gvd(dev, 30));
+}
+
+
+TEST_CASE("hw_monitor 1", "[live]")
+{
+    rs2::context ctx;
+    device_list dev_list = ctx.query_devices();
+    rs2::device dev = get_device(dev_list);
+    REQUIRE(dev);
+    REQUIRE(get_gvd(dev));
+}
+
+TEST_CASE("test lockf", "[live]")
+{
+    size_t num_threads(2);
+    std::string _device_path = "/dev/video1";
+    int _fildes = open(_device_path.c_str(), O_RDWR, 0); //TODO: check
+    REQUIRE(_fildes > 0);
+    std::vector<std::thread> workers;
+    std::vector<int> results(num_threads, false);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers.push_back(std::thread([&results, _fildes, i]()
+        {
+            std::cout << "start test: " << i << std::endl;
+            int res = lockf(_fildes, F_LOCK, 0);
+            std::cout << "locked test: " << i << ": " << res << std::endl;
+            results[i] = lockf(_fildes, F_TEST, 0);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::cout << "done test: " << i << std::endl;
+        }));
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers[i].join();
+    }
+    int num_ok(0);
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << i << " : " << results[i] << std::endl;
+        num_ok += results[i];
+    }
+
+    REQUIRE(num_ok == 1);
+}
+
+int sem_waitfor(sem_t* sem, const struct timespec& duration)
+{
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
+    {
+        /* handle error */
+        return -1;
+    }
+
+    ts.tv_sec += duration.tv_sec;
+    ts.tv_nsec += duration.tv_nsec;
+    int s;
+    while ((s = sem_timedwait(sem, &ts)) == -1 && errno == EINTR)
+                continue;       /* Restart if interrupted by handler */
+    /* Check what happened */
+    if (s == -1)
+    {
+        if (errno == ETIMEDOUT)
+            printf("sem_timedwait() timed out\n");
+        else
+            perror("sem_timedwait");
+    } else
+            printf("sem_timedwait() succeeded\n");
+    return s;
+}
+
+TEST_CASE("test semaphore", "[live]")
+{
+    size_t num_threads(1);
+    std::string _device_path = "/dev/video1";
+    std::replace(_device_path.begin(), _device_path.end(), '/', '_');
+    std::cout << "semaphore name: " << _device_path << std::endl;
+
+    sem_t* _sem = sem_open(_device_path.c_str(), O_CREAT, 0777, 1);
+    if (_sem == SEM_FAILED)
+        std::cout << "sem_open failed: " << std::strerror(errno) << '\n';
+    REQUIRE(_sem != SEM_FAILED);
+    std::vector<std::thread> workers;
+    std::vector<int> results(num_threads, false);
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers.push_back(std::thread([&results, _sem, i]()
+        {
+            // struct timespec timeout{20, 0}; 
+            std::cout << "start test: " << i << std::endl;
+            results[i] = sem_wait(_sem);
+            // results[i] = sem_waitfor(_sem, timeout);
+            // results[i] = sem_trywait(_sem);
+            std::cout << "locked test: " << i << ": " << results[i] << std::endl;
+            std::cout << i << ": sleep for 10(secs)" << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            sem_post(_sem);
+            std::cout << "done test: " << i << std::endl;
+        }));
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    for (int i = 0; i < num_threads; i++)
+    {
+        workers[i].join();
+    }
+    int num_ok(0);
+    for (int i = 0; i < num_threads; i++)
+    {
+        std::cout << i << " : " << results[i] << std::endl;
+        num_ok += results[i];
+    }
+    sem_close(_sem);
+    std::cout << "sem_close()"<< std::endl;
+    // sem_unlink(_device_path.c_str());
+    // std::cout << "sem_unlink()"<< std::endl;
+    REQUIRE(num_ok == 0);
 }
 
 TEST_CASE("Start-Stop streaming  - Sensors callbacks API", "[live][using_callbacks]")

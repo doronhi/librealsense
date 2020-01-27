@@ -8,6 +8,10 @@
 #include <vector>
 #include <algorithm>
 #include <stdint.h>
+#include <iostream>
+
+#include <unistd.h>
+#include <sys/syscall.h>
 
 namespace librealsense
 {
@@ -43,6 +47,8 @@ namespace librealsense
 
                 auto hwm = *it;
                 const auto& m = _device->open(hwm->get_number());
+                if (!m)
+                    throw std::runtime_error("failed to open device.");
 
                 uint32_t transfered_count = 0;
                 auto sts = m->bulk_transfer(hwm->first_endpoint(RS2_USB_ENDPOINT_DIRECTION_WRITE), const_cast<uint8_t*>(data.data()), static_cast<uint32_t>(data.size()), transfered_count, timeout_ms);

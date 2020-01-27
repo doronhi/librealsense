@@ -107,8 +107,15 @@ namespace librealsense
             std::string _device_path;
             uint32_t _timeout;
             int _fildes;
-            std::mutex _mutex;
+            static std::mutex _init_mutex;
+            static std::map<std::string, std::mutex> _dev_mutex;
+            std::mutex _lock_mutex; //used to lock device
+            std::mutex _mutex;      //prevents multiple accesses to locking mechanism.
+            bool _is_self_locked;
         };
+
+        std::mutex named_mutex::_init_mutex;
+        std::map<std::string, std::mutex> named_mutex::_dev_mutex;
 
         static int xioctl(int fh, unsigned long request, void *arg);
 

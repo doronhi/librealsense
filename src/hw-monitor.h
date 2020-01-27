@@ -191,6 +191,19 @@ namespace librealsense
         return {};
     }
 
+    class global_lock_thing
+    {
+        public:
+
+        static global_lock_thing& instance()
+        {
+            static global_lock_thing inst;
+            return inst;
+        }
+
+        std::recursive_mutex _m;
+    };
+
     class locked_transfer
     {
     public:
@@ -210,11 +223,12 @@ namespace librealsense
             });
             if (!token.get()) throw;
 
-            std::lock_guard<std::recursive_mutex> lock(_local_mtx);
+            // std::lock_guard<std::recursive_mutex> lock(_local_mtx);
+            // std::lock_guard<std::recursive_mutex> lock(global_lock_thing::instance()._m);
+            std::lock_guard<platform::uvc_device> lock(*_uvc_sensor_base.get_uvc_device());
             return _uvc_sensor_base.invoke_powered([&]
                 (platform::uvc_device& dev)
                 {
-                    std::lock_guard<platform::uvc_device> lock(dev);
                     return _command_transfer->send_receive(data, timeout_ms, require_response);
                 });
         }
@@ -226,7 +240,7 @@ namespace librealsense
     private:
         std::shared_ptr<platform::command_transfer> _command_transfer;
         uvc_sensor& _uvc_sensor_base;
-        std::recursive_mutex _local_mtx;
+        // static std::recursive_mutex _local_mtx;
         small_heap<int, 256> _heap;
     };
 

@@ -48,6 +48,10 @@
 
 const size_t MAX_DEV_PARENT_DIR = 10;
 
+#define COUT(x) std::cout << x
+#define COUT2(x) std::cout << x
+#define COUT3(x) std::cout << x
+
 #include "../tm2/tm-boot.h"
 
 #ifdef ANDROID
@@ -110,6 +114,9 @@ namespace librealsense
               _timeout(timeout), // TODO: try to lock with timeout
               _fildes(-1)
         {
+            _init_mutex.lock();
+            _dev_mutex[_device_path];   // insert a mutex for _device_path
+            _init_mutex.unlock();
         }
 
         named_mutex::~named_mutex()
@@ -148,32 +155,85 @@ namespace librealsense
 
         void named_mutex::acquire()
         {
-            if (-1 == _fildes)
+            COUT3(syscall(SYS_gettid) << ":acquire(" << _device_path << "): " << "req" << std::endl);
+            if (_is_self_locked)
             {
-                _fildes = open(_device_path.c_str(), O_RDWR, 0); //TODO: check
-                if(0 > _fildes)
-                    throw linux_backend_exception(to_string() << "Cannot open '" << _device_path);
+                COUT3(syscall(SYS_gettid) << ":acquire(" << _device_path << "): " << "already_locked" << std::endl);
             }
+            
+            if (true) //(!_is_self_locked)
+            {
+                if (-1 == _fildes)
+                {
+                    _fildes = open(_device_path.c_str(), O_RDWR, 0); //TODO: check
+                    if(0 > _fildes)
+                    {
+                        COUT3(syscall(SYS_gettid) << ":acquire(" << _device_path << "): " << "Cannot open" << std::endl);
+                        throw linux_backend_exception(to_string() << "Cannot open '" << _device_path);
+                    }
+                }
 
-            auto ret = lockf(_fildes, F_LOCK, 0);
-            if (0 != ret)
-                throw linux_backend_exception(to_string() << "Acquire failed");
+                COUT3(syscall(SYS_gettid) << ":acquire(" << _device_path << "): " << "ask lockf" << std::endl);
+                auto ret = lockf(_fildes, F_LOCK, 0);
+                if (0 != ret)
+                {
+                    COUT3(syscall(SYS_gettid) << ":acquire(" << _device_path << "): " << "Acquire failed" << std::endl);
+                    throw linux_backend_exception(to_string() << "Acquire failed");
+                }
+                COUT3(syscall(SYS_gettid) << ":acquire(" << _device_path << "): " << "lockf" << std::endl);
+                _dev_mutex[_device_path].lock();
+                COUT3(syscall(SYS_gettid) << ":acquire(" << _device_path << "): " << "granted" << std::endl);
+                _is_self_locked = true;
+            }
         }
 
         void named_mutex::release()
         {
+            COUT3(syscall(SYS_gettid) << ":release(" << _device_path << "): " << "req" << std::endl);
             if (-1 == _fildes)
+            {
+                COUT3(syscall(SYS_gettid) << ":release(" << _device_path << "): " << "NULL" << std::endl);
                 return;
-
+            }
+            if (!_is_self_locked)
+            {
+                COUT3(syscall(SYS_gettid) << ":release(" << _device_path << "): " << "not_locked" << std::endl);
+                // return;
+            }
             auto ret = lockf(_fildes, F_ULOCK, 0);
             if (0 != ret)
                 throw linux_backend_exception(to_string() << "lockf(...) failed");
+            COUT3(syscall(SYS_gettid) << ":release(" << _device_path << "): " << "lockf" << std::endl);
 
             ret = close(_fildes);
             if (0 != ret)
                 throw linux_backend_exception(to_string() << "close(...) failed");
 
+            _dev_mutex[_device_path].unlock();
+            // _lock_mutex.unlock();
             _fildes = -1;
+            _is_self_locked = false;
+            COUT3(syscall(SYS_gettid) << ":release(" << _device_path << "): " << "done" << std::endl);
+        }
+
+        std::string hexify(unsigned char n)
+        {
+            std::string res;
+
+            do
+            {
+                res += "0123456789ABCDEF"[n % 16];
+                n >>= 4;
+            } while (n);
+
+            reverse(res.begin(), res.end());
+
+            if (res.size() == 1)
+            {
+                res.insert(0, "0");
+            }
+
+            return res;
         }
 
         static int xioctl(int fh, unsigned long request, void *arg)
@@ -502,6 +562,8 @@ namespace librealsense
                     // to
                     // /sys/devices/pci0000:00/0000:00:xx.0/ABC/M-N/version
                     usb_spec usb_specification = get_usb_connection_type(real_path + "/../../../");
+                    named_mutex dev_mutex(dev_name, 0);
+                    dev_mutex.lock();
 
                     uvc_device_info info{};
                     info.pid = pid;
@@ -512,6 +574,7 @@ namespace librealsense
                     info.unique_id = busnum + "-" + devpath + "-" + devnum;
                     info.conn_spec = usb_specification;
                     info.uvc_capabilities = get_dev_capabilities(dev_name);
+                    dev_mutex.unlock();
 
                     uvc_nodes.emplace_back(info, dev_name);
                 }
