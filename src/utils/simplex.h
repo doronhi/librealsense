@@ -114,11 +114,11 @@ namespace BT {
             //x1, xn, xnp1 are found
 
             ////
-            cout << "x1 = ";
+            std::cout << "x1 = ";
             for (int i = 0; i < N; ++i)
-                cout << x[x1][i] << ",";
-            cout << endl;
-            cout << "max vf: " << vf[x1] << endl;
+                std::cout << x[x1][i] << ",";
+            std::cout << std::endl;
+            std::cout << "max vf: " << vf[x1] << std::endl;
             ////
 
             std::vector<D> xg(N, 0);//xg: centroid of the N best vertexes
@@ -138,7 +138,7 @@ namespace BT {
             for (int i = 0; i < N; ++i)
                 diff += fabs(xcentroid_old[i] - xcentroid_new[i]);
 
-            cout << "diff / N = " << diff / N << endl;
+            std::cout << "diff / N = " << diff / N << std::endl;
             if (diff / N < tol) break;              //terminate the optimizer
             else xcentroid_old.swap(xcentroid_new); //update simplex center
 
