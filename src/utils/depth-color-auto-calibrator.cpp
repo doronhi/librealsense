@@ -666,7 +666,7 @@ namespace librealsense
                 {
                     for (int xx = 0; xx < win_cols; xx++)
                     {
-                        size_t idx_dist = max(abs(xx - (int)hcols), abs(yy - (int)hrows));
+                        size_t idx_dist = abs(max(abs(xx - (int)hcols), abs(yy - (int)hrows)));
                         if ((temp_image[iidx] > max_val) || (temp_image[iidx] == max_val && idx_dist < min_dist))
                         {
                             max_val = temp_image[iidx];
