@@ -174,7 +174,7 @@ TEST_CASE("Frame Drops", "[live]"){
                 int fps = is_usb3(dev) ? 60 : 15; // In USB2 Mode the devices will switch to lower FPS rates
                 float interval_msec = 1000.f / fps;
 
-                for (auto i = 0; i < 10000; i++)
+                for (auto i = 0; i < 200; i++)
                 {
                     std::map<std::string, size_t> frames_per_stream{};
                     std::map<std::string, size_t> last_frame_per_stream{};
@@ -213,10 +213,10 @@ TEST_CASE("Frame Drops", "[live]"){
                                     {
                                         if (RS2_FORMAT_MOTION_XYZ32F != f.get_profile().format())
                                         {
-                                            if ((fn && (fn > prev_fn) &&((fn - prev_fn) > 2)) || (((ts - prev_ts) >= (interval_msec*3.5))))
+                                            if (!(fn && (fn > prev_fn) /*&&((fn - prev_fn) > 2)*/) || (((ts - prev_ts) >= (interval_msec*3.5))))
                                             {
-                                                //if ((fn - prev_fn) > 1)
-                                                //drops_count++;
+                                                if ((fn - prev_fn) > 1)
+                                                    drops_count++;
                                                 std::stringstream s;
                                                 s << "Frame drop was recognized for " << stream_name << " jump from fn " << prev_fn << "  to fn " << fn
                                                   << " from " << std::fixed << std::setprecision(3) << prev_ts << " to "
