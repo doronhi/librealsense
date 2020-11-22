@@ -951,25 +951,38 @@ namespace librealsense
                     else // Check and acquire data buffers from kernel
                     {
                         bool md_extracted = false;
+                        bool keep_md = false;
                         buffers_mgr buf_mgr(_use_memory_map);
                         if (_buf_dispatch.metadata_size())
                         {
                             buf_mgr = _buf_dispatch;
+                            md_extracted = true;
                             _buf_dispatch.set_md_attributes(0,nullptr);
                         }
                         // RAII to handle exceptions
                         std::unique_ptr<int, std::function<void(int*)> > md_poller(new int(0),
-                            [this,&buf_mgr,&md_extracted,&fds](int* d)
+                            [this,&buf_mgr,&md_extracted,&keep_md,&fds](int* d)
                             {
                                 if (!md_extracted)
                                 {
+                                    LOG_DEBUG_V4L("Poller read md ");
                                     acquire_metadata(buf_mgr,fds);
                                     if (buf_mgr.metadata_size())
                                     {
-                                        LOG_DEBUG_V4L("Poller stores buffer internally buf for fd " << std::dec << buf_mgr.get_buffers().at(e_metadata_buf)._file_desc
-                                                      << " , metadata size = " << (int)buf_mgr.metadata_size());
-                                        _buf_dispatch  = buf_mgr; // TODO Evgeni it should override metadata buf only as dispatch may hold video buf from previous cycle
-                                        buf_mgr.handle_buffer(e_metadata_buf,-1); // transfer new buffer request to next cycle
+                                        if (keep_md) // store internally for next poll cycle
+                                        {
+                                            LOG_DEBUG_V4L("Poller stores buf for fd " << std::dec << buf_mgr.get_buffers().at(e_metadata_buf)._file_desc
+                                                          << " ,seq id = " << buf_mgr.get_buffers().at(e_metadata_buf)._dq_buf.index
+                                                          << " , metadata size = " << (int)buf_mgr.metadata_size());
+                                            _buf_dispatch  = buf_mgr; // TODO Evgeni it should override metadata buf only as dispatch may hold video buf from previous cycle
+                                            buf_mgr.handle_buffer(e_metadata_buf,-1); // transfer new buffer request to next cycle
+                                        }
+                                        else // Discard collected metadata buffer
+                                        {
+                                            LOG_DEBUG_V4L("Discard md buffer");
+                                            auto md_buf = buf_mgr.get_buffers().at(e_metadata_buf);
+                                            md_buf._data_buf->request_next_frame(md_buf._file_desc,true);
+                                        }
                                     }
                                 }
                                 delete d;
@@ -1027,7 +1040,13 @@ namespace librealsense
                                             s << "overflow video frame detected!\nSize " << buf.bytesused
                                                 << ", payload size " << buffer->get_length_frame_only();
                                     }
-                                    //buf_mgr.request_next_frame(); // Evgeni
+                                    //buf_mgr.request_next_frame();
+                                    // Check if metadata was already allocated
+                                    if (buf_mgr.metadata_size())
+                                    {
+                                        LOG_WARNING("Metadata was present when partial frame arrived, mark md as extracted");
+                                        md_extracted = true;
+                                    }
                                     LOG_WARNING("Incomplete frame received: " << s.str()); // Ev -try1
                                     librealsense::notification n = { RS2_NOTIFICATION_CATEGORY_FRAME_CORRUPTED, 0, RS2_LOG_SEVERITY_WARN, s.str()};
 
@@ -1070,6 +1089,7 @@ namespace librealsense
                         }
                         else
                         {
+                            keep_md = true;
                             LOG_DEBUG("FD_ISSET: no data on video node sink");
                         }
                     }
