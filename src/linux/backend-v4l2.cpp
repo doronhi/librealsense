@@ -49,14 +49,6 @@ const size_t MAX_DEV_PARENT_DIR = 10;
 
 #include "../tm2/tm-boot.h"
 
-#define DEBUG_V4L
-#ifdef DEBUG_V4L
-#define LOG_DEBUG_V4L(...)   do { CLOG(DEBUG   ,"librealsense") << __VA_ARGS__; } while(false)
-#else
-#define LOG_DEBUG_V4L(...)
-#endif //DEBUG_V4L
-
-
 #ifdef ANDROID
 
 // https://android.googlesource.com/platform/bionic/+/master/libc/include/bits/lockf.h
@@ -313,11 +305,11 @@ namespace librealsense
             _must_enqueue = false;
         }
 
-        void buffer::request_next_frame(int fd)
+        void buffer::request_next_frame(int fd, bool force)
         {
             std::lock_guard<std::mutex> lock(_mutex);
 
-            if (_must_enqueue)
+            if (_must_enqueue || force)
             {
                 if (!_use_memory_map)
                 {
@@ -365,6 +357,9 @@ namespace librealsense
                 if (buf._data_buf && (buf._file_desc >= 0))
                     buf._data_buf->request_next_frame(buf._file_desc);
             };
+            _md_start = nullptr;
+            _md_size = 0;
+            LOG_DEBUG_V4L("buffers_mgr: md_size= " << std::dec << (int)_md_size);
         }
 
         void buffers_mgr::set_md_from_video_node(bool compressed)
@@ -682,7 +677,8 @@ namespace librealsense
               _named_mtx(nullptr),
               _use_memory_map(use_memory_map),
               _fd(-1),
-              _stop_pipe_fd{}
+              _stop_pipe_fd{},
+              _buf_dispatch(use_memory_map)
         {
             foreach_uvc_device([&info, this](const uvc_device_info& i, const std::string& name)
             {
@@ -956,11 +952,26 @@ namespace librealsense
                     {
                         bool md_extracted = false;
                         buffers_mgr buf_mgr(_use_memory_map);
+                        if (_buf_dispatch.metadata_size())
+                        {
+                            buf_mgr = _buf_dispatch;
+                            _buf_dispatch.set_md_attributes(0,nullptr);
+                        }
                         // RAII to handle exceptions
                         std::unique_ptr<int, std::function<void(int*)> > md_poller(new int(0),
                             [this,&buf_mgr,&md_extracted,&fds](int* d)
                             {
-                                if (!md_extracted) acquire_metadata(buf_mgr,fds);
+                                if (!md_extracted)
+                                {
+                                    acquire_metadata(buf_mgr,fds);
+                                    if (buf_mgr.metadata_size())
+                                    {
+                                        LOG_DEBUG_V4L("Poller stores buffer internally buf for fd " << std::dec << buf_mgr.get_buffers().at(e_metadata_buf)._file_desc
+                                                      << " , metadata size = " << (int)buf_mgr.metadata_size());
+                                        _buf_dispatch  = buf_mgr; // TODO Evgeni it should override metadata buf only as dispatch may hold video buf from previous cycle
+                                        buf_mgr.handle_buffer(e_metadata_buf,-1); // transfer new buffer request to next cycle
+                                    }
+                                }
                                 delete d;
                             });
 
@@ -973,10 +984,10 @@ namespace librealsense
                             if(xioctl(_fd, VIDIOC_DQBUF, &buf) < 0)
                             {
                                 LOG_DEBUG_V4L("Dequeued empty buf for fd " << std::dec << _fd);
-                                if(errno == EAGAIN)
-                                    return;
+                                //if(errno == EAGAIN)
+                                //    return;
 
-                                throw linux_backend_exception(to_string() << "xioctl(VIDIOC_DQBUF) failed for fd: " << _fd);
+                                //throw linux_backend_exception(to_string() << "xioctl(VIDIOC_DQBUF) failed for fd: " << _fd);
                             }
                             LOG_DEBUG_V4L("Dequeued buf " << std::dec << buf.index << " for fd " << _fd << " seq " << buf.sequence);
 
@@ -987,7 +998,7 @@ namespace librealsense
                             {
                                 if(buf.bytesused == 0)
                                 {
-                                    LOG_INFO("Empty video frame arrived");
+                                    LOG_INFO("Empty video frame arrived, index " << buf.index);
                                     return;
                                 }
 
@@ -1016,7 +1027,7 @@ namespace librealsense
                                             s << "overflow video frame detected!\nSize " << buf.bytesused
                                                 << ", payload size " << buffer->get_length_frame_only();
                                     }
-                                    buf_mgr.request_next_frame(); // Evgeni
+                                    //buf_mgr.request_next_frame(); // Evgeni
                                     LOG_WARNING("Incomplete frame received: " << s.str()); // Ev -try1
                                     librealsense::notification n = { RS2_NOTIFICATION_CATEGORY_FRAME_CORRUPTED, 0, RS2_LOG_SEVERITY_WARN, s.str()};
 
@@ -1027,11 +1038,11 @@ namespace librealsense
                                     auto timestamp = (double)buf.timestamp.tv_sec*1000.f + (double)buf.timestamp.tv_usec/1000.f;
                                     timestamp = monotonic_to_realtime(timestamp);
 
-                                    // Read metadata. For metadata note performs a blocking call to ensure video and metadata sync
+                                    // Read metadata. Metadata node performs a blocking call to ensure video and metadata sync
                                     acquire_metadata(buf_mgr,fds,compressed_format);
                                     md_extracted = true;
 
-                                    //if (val > 1)
+                                    //if (val > 1)1
                                     //    LOG_INFO("Frame buf ready, md size: " << std::dec << (int)buf_mgr.metadata_size() << " seq. id: " << buf.sequence);
                                     frame_object fo{ std::min(buf.bytesused - buf_mgr.metadata_size(), buffer->get_length_frame_only()), buf_mgr.metadata_size(),
                                         buffer->get_frame_start(), buf_mgr.metadata_start(), timestamp };
@@ -1059,7 +1070,7 @@ namespace librealsense
                         }
                         else
                         {
-                            LOG_WARNING("FD_ISSET signal false - no data on video node sink");
+                            LOG_DEBUG("FD_ISSET: no data on video node sink");
                         }
                     }
                 }
@@ -1590,7 +1601,7 @@ namespace librealsense
             // 1. Obtain video node data.
             // 2. Obtain metadata
             //     To revert to multiplexing mode uncomment the next line
-            // _fds.push_back(_md_fd);
+            _fds.push_back(_md_fd);
             _max_fd = *std::max_element(_fds.begin(),_fds.end());
 
             v4l2_capability cap = {};
@@ -1671,12 +1682,21 @@ namespace librealsense
         void v4l_uvc_meta_device::acquire_metadata(buffers_mgr & buf_mgr,fd_set &fds, bool)
         {
             // Metadata is calculated once per frame
-            if (buf_mgr.metadata_size())
-                return;
+            // Evgeni TODO - enqueue MD if it is overrided
+            //if (buf_mgr.metadata_size())
+            //    return;
 
-            //Use blocking metadata node polling. Uncomment the next lines to revert to multiplexing I/O mode
-            //if(FD_ISSET(_md_fd, &fds))
+
+            //Use non-blocking metadata node polling. Uncomment the next lines to revert to blocking I/O mode
+            if(FD_ISSET(_md_fd, &fds))
             {
+                // Evgeni discard and enqueue old buf before it's overrided
+                if (buf_mgr.metadata_size())
+                {
+                    LOG_DEBUG_V4L("Metadata override, size =  " << std::dec << (int)buf_mgr.metadata_size());
+                    buf_mgr.get_buffers().at(e_metadata_buf)._data_buf->request_next_frame(_md_fd,true);
+                }
+
                 //FD_CLR(_md_fd,&fds);
                 v4l2_buffer buf{};
                 buf.type = LOCAL_V4L2_BUF_TYPE_META_CAPTURE;
@@ -1686,7 +1706,7 @@ namespace librealsense
                 if(xioctl(_md_fd, VIDIOC_DQBUF, &buf) < 0)
                 {
                     LOG_DEBUG_V4L("Dequeued empty buf for md fd " << std::dec << _md_fd);
-                    return;
+                    //return;
 
                     //throw linux_backend_exception(to_string() << "xioctl(VIDIOC_DQBUF) failed for metadata fd: " << _md_fd);
                 }
