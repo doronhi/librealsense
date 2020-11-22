@@ -12,8 +12,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
-//#include <sys/epoll.h> // Evgeni  - trying to use epoll instead of blocking select
-#include <poll.h>
 
 #pragma GCC diagnostic ignored "-Woverflow"
 
@@ -551,41 +549,36 @@ namespace librealsense
 //                      return 1;
 //                    }
 //                }
-                struct pollfd fds[2];
-                fds[0].fd = _stop_pipe_fd[0];
-                fds[1].fd = _fd;
-                fds[1].events = POLLIN | POLLRDNORM | POLLRDBAND | POLLPRI;
-                fds[2].events = POLLIN | POLLRDNORM | POLLRDBAND | POLLPRI;
+//              struct pollfd fds[2];
+//              fds[0].fd = _stop_pipe_fd[0];
+//              fds[1].fd = _fd;
+//              fds[1].events = POLLIN | POLLRDNORM | POLLRDBAND | POLLPRI;
+//              fds[2].events = POLLIN | POLLRDNORM | POLLRDBAND | POLLPRI;
 
                 do {
-//                    fd_set fds;
-//                    FD_ZERO(&fds);
-//                    FD_SET(_fd, &fds);
-//                    FD_SET(_stop_pipe_fd[0], &fds);
+                    fd_set fds;
+                    FD_ZERO(&fds);
+                    FD_SET(_fd, &fds);
+                    FD_SET(_stop_pipe_fd[0], &fds);
 
-//                    int max_fd = std::max(_stop_pipe_fd[0], _fd);
-//                    ssize_t read_size = 0;
+                    int max_fd = std::max(_stop_pipe_fd[0], _fd);
 
-//                    // Evgeni struct timeval tv = {5, 0};
-//                    struct timeval tv = {0, 5000}; // Hold no longer than N msec
-                    //LOG_DEBUG("HID IIO Select initiated");
                     ssize_t read_size = 0;
-                    LOG_DEBUG("HID IIO poll initiated");
-                    //auto event_count = epoll_wait(epoll_fd, events, hid_buf_len, 20);
-                    auto val = poll(fds, 2, 20);
-                    //auto val = select(max_fd + 1, &fds, nullptr, nullptr, &tv);
-                    //LOG_DEBUG("HID IIO Select done, val = " << val);
-                    LOG_DEBUG("HID IIO poll done, val = " << val);
+                    // Evgeni struct timeval tv = {5, 0};
+                    struct timeval tv = {0, 5000}; // Hold no longer than N msec
+                    LOG_DEBUG("HID IIO Select initiated");
+                    auto val = select(max_fd + 1, &fds, nullptr, nullptr, &tv);
+                    LOG_DEBUG("HID IIO Select done, val = " << val);
 
                     if (val < 0)
                     {
                         // TODO: write to log?
-                        LOG_WARNING("iio_hid_sensor: poll failed");
+                        LOG_WARNING("iio_hid_sensor: select failed");
                         continue;
                     }
                     else if (val > 0)
                     {
-                        /*if(FD_ISSET(_stop_pipe_fd[0], &fds))
+                        if(FD_ISSET(_stop_pipe_fd[0], &fds))
                         {
                             if(!_is_capturing)
                             {
@@ -593,7 +586,7 @@ namespace librealsense
                                 return 0;
                             }
                         }
-                        else* if (FD_ISSET(_fd, &fds))*/ if (fds[1].revents & POLLIN)
+                        else if (FD_ISSET(_fd, &fds))
                         {
                             read_size = read(_fd, raw_data.data(), raw_data_size);
                             if (read_size < 0 )
@@ -666,96 +659,6 @@ namespace librealsense
                             std::this_thread::yield();
                         } while (std::chrono::high_resolution_clock::now() < end);
                     }
-
-//                    if (val < 0)
-//                    {
-//                        // TODO: write to log?
-//                        LOG_WARNING("iio_hid_sensor: select failed");
-//                        continue;
-//                    }
-//                    else if (val > 0)
-//                    {
-//                        if(FD_ISSET(_stop_pipe_fd[0], &fds))
-//                        {
-//                            if(!_is_capturing)
-//                            {
-//                                LOG_INFO("iio_hid_sensor: Stream finished");
-//                                return 0;
-//                            }
-//                        }
-//                        else if (FD_ISSET(_fd, &fds))
-//                        {
-//                            read_size = read(_fd, raw_data.data(), raw_data_size);
-//                            if (read_size < 0 )
-//                                continue;
-//                        }
-//                        else
-//                        {
-//                            // TODO: write to log?
-//                            LOG_WARNING("HID IIO unresolved event : after select->FD_ISSET");
-//                            continue;
-//                        }
-
-//                        auto sz= read_size / channel_size;
-//                        if (sz > 2)
-//                        {
-//                            LOG_DEBUG("HID: Going to handle " <<  sz << " packets");
-//                        }
-//                        // TODO: code refactoring to reduce latency
-//                        for (auto i = 0; i < sz; ++i)
-//                        {
-//                            auto now_ts = std::chrono::duration<double, std::milli>(std::chrono::system_clock::now().time_since_epoch()).count();
-//                            auto p_raw_data = raw_data.data() + channel_size * i;
-//                            sensor_data sens_data{};
-//                            sens_data.sensor = hid_sensor{get_sensor_name()};
-
-//                            auto hid_data_size = channel_size - (metadata ? HID_METADATA_SIZE : 0);
-//                            // Populate HID IMU data - Header
-//                            metadata_hid_raw meta_data{};
-//                            meta_data.header.report_type = md_hid_report_type::hid_report_imu;
-//                            meta_data.header.length = hid_header_size + metadata_imu_report_size;
-//                            meta_data.header.timestamp = *(reinterpret_cast<uint64_t *>(&p_raw_data[16]));
-//                            // Payload:
-//                            meta_data.report_type.imu_report.header.md_type_id = md_type::META_DATA_HID_IMU_REPORT_ID;
-//                            meta_data.report_type.imu_report.header.md_size = metadata_imu_report_size;
-////                            meta_data.report_type.imu_report.flags = static_cast<uint8_t>( md_hid_imu_attributes::custom_timestamp_attirbute |
-////                                                                                            md_hid_imu_attributes::imu_counter_attribute |
-////                                                                                            md_hid_imu_attributes::usb_counter_attribute);
-////                            meta_data.report_type.imu_report.custom_timestamp = meta_data.header.timestamp;
-////                            meta_data.report_type.imu_report.imu_counter = p_raw_data[30];
-////                            meta_data.report_type.imu_report.usb_counter = p_raw_data[31];
-
-//                            sens_data.fo = {hid_data_size, metadata? meta_data.header.length: uint8_t(0),
-//                                            p_raw_data,  metadata? &meta_data : nullptr, now_ts};
-//                            //Linux HID provides timestamps in nanosec. Convert to usec (FW default)
-//                            if (metadata)
-//                            {
-//                                //auto* ts_nsec = reinterpret_cast<uint64_t*>(const_cast<void*>(sens_data.fo.metadata));
-//                                //*ts_nsec /=1000;
-//                                meta_data.header.timestamp /=1000;
-//                            }
-
-////                            for (auto i=0ul; i<channel_size; i++)
-////                                std::cout << std::hex << int(p_raw_data[i]) << " ";
-////                            std::cout << std::dec << std::endl;
-
-//                            this->_callback(sens_data);
-//                        }
-//                        if (sz > 2)
-//                        {
-//                            LOG_DEBUG("HID: Finished to handle " <<  sz << " packets");
-//                        }
-//                    }
-//                    else
-//                    {
-//                        LOG_WARNING("iio_hid_sensor: Frames didn't arrived within the predefined interval");
-//                        // Use busy "sleep" to try and reduce the kernel blocking time
-//                        auto start = std::chrono::high_resolution_clock::now();
-//                        auto end = start + std::chrono::microseconds(2000);
-//                        do {
-//                            std::this_thread::yield();
-//                        } while (std::chrono::high_resolution_clock::now() < end);
-//                    }
                 } while(this->_is_capturing);
             }));
         }

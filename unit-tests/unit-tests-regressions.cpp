@@ -346,7 +346,8 @@ TEST_CASE("Frame Drops", "[live]"){
                 }
                 else
                 {
-                    FAIL("Device doesn't support AdvancedMode API");
+                    if(!is_l500_device)
+                        FAIL("Device doesn't support AdvancedMode API");
                 }
             }
         }
