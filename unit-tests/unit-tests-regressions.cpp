@@ -147,6 +147,13 @@ TEST_CASE("Frame Drops", "[live]"){
                 REQUIRE(list.size());
 
                 auto dev = list[0];
+                bool is_l500_device = false;
+                if (dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE) &&
+                    std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE)) == "L500")
+                {
+                    is_l500_device = true;
+                }
+
                 CAPTURE(dev.get_info(RS2_CAMERA_INFO_NAME));
                 disable_sensitive_options_for(dev);
 //                for (auto& snr : dev.query_sensors())
@@ -172,6 +179,8 @@ TEST_CASE("Frame Drops", "[live]"){
                 size_t drops_count=0;
                 bool all_streams = true;
                 int fps = is_usb3(dev) ? 60 : 15; // In USB2 Mode the devices will switch to lower FPS rates
+                if (is_l500_device)
+                    fps = 30;
                 float interval_msec = 1000.f / fps;
 
                 for (auto i = 0; i < 200; i++)
@@ -182,7 +191,10 @@ TEST_CASE("Frame Drops", "[live]"){
                     std::vector<std::string> drop_descriptions;
                     bool iter_finished  =false;
 
-                    auto profiles = configure_all_supported_streams(dev, 848, 480, fps);
+                    int width = is_l500_device ? 640 : 848;
+                    int height = 480;
+                    auto profiles = configure_all_supported_streams(dev, width, height, fps);
+                    //for l500 - auto profiles = configure_all_supported_streams(dev, 640, 480, fps);
                     drops_count=0;
 
                     auto start_time = std::chrono::high_resolution_clock::now();
