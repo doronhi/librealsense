@@ -156,24 +156,6 @@ TEST_CASE("Frame Drops", "[live]"){
 
                 CAPTURE(dev.get_info(RS2_CAMERA_INFO_NAME));
                 disable_sensitive_options_for(dev);
-//                for (auto& snr : dev.query_sensors())
-//                {
-//                    if (snr.supports(RS2_OPTION_GLOBAL_TIME_ENABLED))
-//                    {
-//                        REQUIRE(0.f ==snr.get_option(RS2_OPTION_GLOBAL_TIME_ENABLED));
-//                        snr.set_option(RS2_OPTION_GLOBAL_TIME_ENABLED,0.f);
-//                    }
-
-//                    if (snr.supports(RS2_OPTION_ERROR_POLLING_ENABLED))
-//                    {
-//                        snr.set_option(RS2_OPTION_ERROR_POLLING_ENABLED,1.f);
-//                        snr.set_notifications_callback([&](rs2::notification n)
-//                        {
-//                            std::unique_lock<std::mutex> lock(m);
-//                            WARN("Notification: " << n.get_severity() << " : " << n.get_description());
-//                        });
-//                    }
-//                }
 
                 std::mutex m;
                 size_t drops_count=0;
@@ -222,6 +204,9 @@ TEST_CASE("Frame Drops", "[live]"){
                                     auto prev_fn = last_frame_per_stream[stream_name];
                                     auto prev_ts = last_frame_ts_per_stream[stream_name];
                                     auto prev_ts_dom = last_ts_domain_per_stream[stream_name];
+                                    auto delta_t = ts - prev_ts;
+                                    auto min_delay = interval_msec*3.5;
+                                    auto max_delay = interval_msec*20;
 
                                     auto arrival_time = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - start_time);
                                     // Skip events during the first 2 second
@@ -229,9 +214,8 @@ TEST_CASE("Frame Drops", "[live]"){
                                     {
                                         if (RS2_FORMAT_MOTION_XYZ32F != f.get_profile().format())
                                         {
-                                            if (!(fn && (fn > prev_fn) /*&&((fn - prev_fn) > 2)*/) || (((ts - prev_ts) >= (interval_msec*3.5))))
-                                                 (((ts - prev_ts) >= (interval_msec*3.5)) /*&& ((ts - prev_ts) < (interval_msec*20))*/))
-                                                    /*&& ((RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME !=ts_dom) && (ts_dom ==prev_ts_dom))*/)
+                                            if (/*!(fn > prev_fn) ||*/
+                                                 ((delta_t >= min_delay) && (RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME !=ts_dom) && (ts_dom ==prev_ts_dom)))
                                             {
                                                 if ((fn - prev_fn) > 1)
                                                     drops_count++;
@@ -246,7 +230,7 @@ TEST_CASE("Frame Drops", "[live]"){
                                                     s << " hw ts: " << f.get_frame_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP) << " = 0x"
                                                       << std::hex << f.get_frame_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP) << std::dec;
                                                 WARN(s.str().c_str());
-                                                if (fabs(fn - prev_fn)< 20)
+                                                if (delta_t < max_delay) // Skip inconsistent frame numbers due to intermittent metadata
                                                 {
                                                     system(syscl.c_str());
                                                     exit(1);
