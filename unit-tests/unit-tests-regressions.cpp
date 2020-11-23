@@ -188,6 +188,7 @@ TEST_CASE("Frame Drops", "[live]"){
                     std::map<std::string, size_t> frames_per_stream{};
                     std::map<std::string, size_t> last_frame_per_stream{};
                     std::map<std::string, double> last_frame_ts_per_stream{};
+                    std::map<std::string, rs2_timestamp_domain> last_ts_domain_per_stream{};
                     std::vector<std::string> drop_descriptions;
                     bool iter_finished  =false;
 
@@ -207,18 +208,21 @@ TEST_CASE("Frame Drops", "[live]"){
                     std::cout << ss.str().c_str() << std::endl;
                     for (auto s : profiles.first)
                     {
-                        REQUIRE_NOTHROW(s.start([&m, &frames_per_stream,&last_frame_per_stream,&last_frame_ts_per_stream,&drops_count,
+                        REQUIRE_NOTHROW(s.start([&m, &frames_per_stream,&last_frame_per_stream,&last_frame_ts_per_stream,&last_ts_domain_per_stream,&drops_count,
                                                 &drop_descriptions,&cv,&all_streams,&iter_finished,start_time,profiles,interval_msec,syscl](rs2::frame f)
                             {
                                 auto time_elapsed = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - start_time);
                                 auto stream_name = f.get_profile().stream_name();
                                 auto fn = f.get_frame_number();
                                 auto ts = f.get_timestamp();
+                                auto ts_dom = f.get_frame_timestamp_domain();
 
                                 if (frames_per_stream[stream_name])
                                 {
                                     auto prev_fn = last_frame_per_stream[stream_name];
                                     auto prev_ts = last_frame_ts_per_stream[stream_name];
+                                    auto prev_ts_dom = last_ts_domain_per_stream[stream_name];
+
                                     auto arrival_time = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - start_time);
                                     // Skip events during the first 2 second
                                     if (time_elapsed.count() > 2000)
@@ -226,6 +230,8 @@ TEST_CASE("Frame Drops", "[live]"){
                                         if (RS2_FORMAT_MOTION_XYZ32F != f.get_profile().format())
                                         {
                                             if (!(fn && (fn > prev_fn) /*&&((fn - prev_fn) > 2)*/) || (((ts - prev_ts) >= (interval_msec*3.5))))
+                                                 (((ts - prev_ts) >= (interval_msec*3.5)) /*&& ((ts - prev_ts) < (interval_msec*20))*/))
+                                                    && ((RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME !=ts_dom) && (ts_dom ==prev_ts_dom)))
                                             {
                                                 if ((fn - prev_fn) > 1)
                                                     drops_count++;
@@ -233,7 +239,7 @@ TEST_CASE("Frame Drops", "[live]"){
                                                 s << "Frame drop was recognized for " << stream_name << " jump from fn " << prev_fn << "  to fn " << fn
                                                   << " from " << std::fixed << std::setprecision(3) << prev_ts << " to "
                                                   << ts << " while expected ts = " << (prev_ts + interval_msec)
-                                                  << ", ts domain " << f.get_frame_timestamp_domain()
+                                                  << ", ts domain " << ts_dom
                                                   << " time elapsed: " << time_elapsed.count()/1000.f << " sec, host time: "
                                                   << std::chrono::high_resolution_clock::now().time_since_epoch().count();
                                                 if (f.supports_frame_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP))

@@ -984,7 +984,12 @@ namespace librealsense
                                             md_buf._data_buf->request_next_frame(md_buf._file_desc,true);
                                         }
                                     }
+                                    else
+                                    {
+                                        LOG_WARNING("Poller: No metadata could be extracted");
+                                    }
                                 }
+
                                 delete d;
                             });
 
@@ -1041,16 +1046,20 @@ namespace librealsense
                                                 << ", payload size " << buffer->get_length_frame_only();
                                     }
                                     //buf_mgr.request_next_frame();
+
+                                    LOG_WARNING("Incomplete frame received: " << s.str()); // Ev -try1
+                                    librealsense::notification n = { RS2_NOTIFICATION_CATEGORY_FRAME_CORRUPTED, 0, RS2_LOG_SEVERITY_WARN, s.str()};
+
+                                    _error_handler(n);
                                     // Check if metadata was already allocated
                                     if (buf_mgr.metadata_size())
                                     {
                                         LOG_WARNING("Metadata was present when partial frame arrived, mark md as extracted");
                                         md_extracted = true;
+                                        LOG_DEBUG_V4L("Discarding md due to invalid video payload");
+                                        auto md_buf = buf_mgr.get_buffers().at(e_metadata_buf);
+                                        md_buf._data_buf->request_next_frame(md_buf._file_desc,true);
                                     }
-                                    LOG_WARNING("Incomplete frame received: " << s.str()); // Ev -try1
-                                    librealsense::notification n = { RS2_NOTIFICATION_CATEGORY_FRAME_CORRUPTED, 0, RS2_LOG_SEVERITY_WARN, s.str()};
-
-                                    _error_handler(n);
                                 }
                                 else
                                 {
@@ -1750,6 +1759,7 @@ namespace librealsense
                     }
                     else
                     {
+                        LOG_WARNING("Invalid md size: bytes used =  " << buf.bytesused << " ,start offset=" << uvc_md_start_offset);
                         // Zero-size buffers generate empty md. Non-zero partial bufs handled as errors
                         if(buf.bytesused > 0)
                         {
