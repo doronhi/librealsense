@@ -231,7 +231,7 @@ TEST_CASE("Frame Drops", "[live]"){
                                         {
                                             if (!(fn && (fn > prev_fn) /*&&((fn - prev_fn) > 2)*/) || (((ts - prev_ts) >= (interval_msec*3.5))))
                                                  (((ts - prev_ts) >= (interval_msec*3.5)) /*&& ((ts - prev_ts) < (interval_msec*20))*/))
-                                                    && ((RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME !=ts_dom) && (ts_dom ==prev_ts_dom)))
+                                                    /*&& ((RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME !=ts_dom) && (ts_dom ==prev_ts_dom))*/)
                                             {
                                                 if ((fn - prev_fn) > 1)
                                                     drops_count++;
