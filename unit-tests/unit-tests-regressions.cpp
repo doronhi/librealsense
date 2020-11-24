@@ -230,8 +230,10 @@ TEST_CASE("Frame Drops", "[live]"){
                                                     s << " hw ts: " << f.get_frame_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP) << " = 0x"
                                                       << std::hex << f.get_frame_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP) << std::dec;
                                                 WARN(s.str().c_str());
-                                                if (delta_t < max_delay) // Skip inconsistent frame numbers due to intermittent metadata
+                                                if ((delta_t < max_delay) || (fabs(fn - prev_fn)< 20)) // Skip inconsistent frame numbers due to intermittent metadata
                                                 {
+                                                    std::cout << "Frame interval = " << delta_t << ", max = " << max_delay << std::endl;
+                                                    std::cout << "fn = " << fn << ", prev_fn = " << prev_fn << std::endl;
                                                     system(syscl.c_str());
                                                     exit(1);
                                                 }
@@ -273,7 +275,7 @@ TEST_CASE("Frame Drops", "[live]"){
                                 last_frame_ts_per_stream[stream_name] = ts;
                                 {
                                     std::lock_guard<std::mutex> lock(m);
-                                    if (drops_count /*|| (!all_streams)*/)
+                                    if (drops_count || (!all_streams))
                                         cv.notify_all();
                                 }
                             }));
@@ -321,7 +323,8 @@ TEST_CASE("Frame Drops", "[live]"){
                     }
 
                     REQUIRE(profiles.second.size() == frames_per_stream.size());
-                    REQUIRE( drops_count == 0);
+                    //REQUIRE( drops_count == 0);
+                    REQUIRE( all_streams);
                 }
 
                 if (dev.is<rs400::advanced_mode>())

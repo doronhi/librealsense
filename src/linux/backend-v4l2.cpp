@@ -359,7 +359,6 @@ namespace librealsense
             };
             _md_start = nullptr;
             _md_size = 0;
-            LOG_DEBUG_V4L("buffers_mgr: md_size= " << std::dec << (int)_md_size);
         }
 
         void buffers_mgr::set_md_from_video_node(bool compressed)
@@ -924,6 +923,9 @@ namespace librealsense
                     val = 0;
                     LOG_DEBUG_V4L("Select timeouted");
                 }
+
+                if (val< 0)
+                    LOG_DEBUG_V4L("Select interrupted, val = " << val << ", error = " << errno);
             } while (val < 0 && errno == EINTR);
 
             LOG_DEBUG_V4L("Select done, val = " << val << " at " << time_in_HH_MM_SS_MMM());
