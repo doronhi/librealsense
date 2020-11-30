@@ -153,6 +153,8 @@ TEST_CASE("Frame Drops", "[live]"){
                 {
                     is_l500_device = true;
                 }
+                int width = is_l500_device ? 640 : 848;
+                int height = 480;
 
                 CAPTURE(dev.get_info(RS2_CAMERA_INFO_NAME));
                 disable_sensitive_options_for(dev);
@@ -163,6 +165,23 @@ TEST_CASE("Frame Drops", "[live]"){
                 int fps = is_usb3(dev) ? 60 : 15; // In USB2 Mode the devices will switch to lower FPS rates
                 if (is_l500_device)
                     fps = 30;
+
+                std::vector<profile> all_profiles =
+                {
+                    { RS2_STREAM_DEPTH,     RS2_FORMAT_Z16,           width, height,    0, fps},
+                    { RS2_STREAM_COLOR,     RS2_FORMAT_RGB8,          width, height,    0, fps},
+                    { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    1, fps},
+                    { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    2, fps},
+                    { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    0, fps},
+                    { RS2_STREAM_CONFIDENCE,RS2_FORMAT_RAW8,          width, height,    0, fps},
+                    { RS2_STREAM_FISHEYE,   RS2_FORMAT_RAW8,          width, height,    0, fps},
+                    { RS2_STREAM_ACCEL,     RS2_FORMAT_MOTION_XYZ32F,   1,      1,      0, 200},
+                    { RS2_STREAM_GYRO,      RS2_FORMAT_MOTION_XYZ32F,   1,      1,      0, 200},
+                };
+
+                auto profiles = configure_all_supported_streams(dev, width, height, fps, all_profiles);
+                //for l500 - auto profiles = configure_all_supported_streams(dev, 640, 480, fps);
+
                 float interval_msec = 1000.f / fps;
 
                 for (auto i = 0; i < 200; i++)
@@ -174,10 +193,6 @@ TEST_CASE("Frame Drops", "[live]"){
                     std::vector<std::string> drop_descriptions;
                     bool iter_finished  =false;
 
-                    int width = is_l500_device ? 640 : 848;
-                    int height = 480;
-                    auto profiles = configure_all_supported_streams(dev, width, height, fps);
-                    //for l500 - auto profiles = configure_all_supported_streams(dev, 640, 480, fps);
                     drops_count=0;
 
                     auto start_time = std::chrono::high_resolution_clock::now();
@@ -463,14 +478,15 @@ TEST_CASE("DSO-15050", "[live]")
 TEST_CASE("logger-load", "")
 {
     {
-        // rs2::log_to_file(RS2_LOG_SEVERITY_DEBUG, "lrs_log.txt");
-        rs2::log_to_console(RS2_LOG_SEVERITY_DEBUG);
+        rs2::log_to_file(RS2_LOG_SEVERITY_DEBUG, "lrs_log.txt");
+        // rs2::log_to_console(RS2_LOG_SEVERITY_DEBUG);
         std::vector<std::shared_ptr<std::thread> > threads;
         const size_t num_threads(10);
-        std::chrono::seconds test_running_time(10);
-        std::chrono::milliseconds thread_sleep_time(10);
+        std::chrono::seconds test_running_time(60*30);
+        std::chrono::milliseconds thread_sleep_time(1);
         std::chrono::milliseconds max_delay_time(50);
         bool is_running(true);
+        double _global_counter(0.0);
         std::condition_variable cv;
         std::mutex m;
 
@@ -487,7 +503,11 @@ TEST_CASE("logger-load", "")
                     std::this_thread::sleep_for(thread_sleep_time);
                     crnt_time = std::chrono::high_resolution_clock::now();
                     std::chrono::milliseconds diff = std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time - prev_time);
-                    LOG_INFO(std::dec << "thread id:" << thread_idx << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time));
+                    LOG_INFO(std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time));
+                    // {
+                    //     std::unique_lock<std::mutex> lock(m);
+                    //     _global_counter+=(0.1);
+                    // }
                     if (crnt_time-prev_time > thread_sleep_time + max_delay_time)
                     {
                         LOG_ERROR(std::dec << "thread id:" << thread_idx << ":" << " diff: " << diff.count());
@@ -501,9 +521,17 @@ TEST_CASE("logger-load", "")
             }));
         }
         auto start_time = std::chrono::high_resolution_clock::now();
+        while(is_running && std::chrono::high_resolution_clock::now()-start_time < test_running_time)
         {
-            std::unique_lock<std::mutex> lock(m);
-            cv.wait_for(lock, test_running_time, [&] {return (!is_running); });
+            {
+                std::unique_lock<std::mutex> lock(m);
+                cv.wait_for(lock, std::chrono::seconds(1), [&] {return (!is_running); });
+            }
+            // {
+            //     std::unique_lock<std::mutex> lock(m);
+            //     auto crnt_time = std::chrono::high_resolution_clock::now();
+            //     LOG_INFO("time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " _global_counter=" << _global_counter);
+            // }
         }
         bool test_ok(is_running);
         if (!is_running)

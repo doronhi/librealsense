@@ -98,20 +98,23 @@ struct device_profiles
     bool sync;
 };
 
-inline std::vector<profile>  configure_all_supported_streams(rs2::sensor& sensor, int width = 640, int height = 480, int fps = 60)
+inline std::vector<profile>  configure_all_supported_streams(rs2::sensor& sensor, int width = 640, int height = 480, int fps = 60, std::vector<profile> all_profiles = std::vector<profile>())
 {
-    std::vector<profile> all_profiles =
+    if (all_profiles.empty())
     {
-        { RS2_STREAM_DEPTH,     RS2_FORMAT_Z16,           width, height,    0, fps},
-        { RS2_STREAM_COLOR,     RS2_FORMAT_RGB8,          width, height,    0, fps},
-        { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    1, fps},
-        { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    2, fps},
-        { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    0, fps},
-        { RS2_STREAM_CONFIDENCE,RS2_FORMAT_RAW8,          width, height,    0, fps},
-        { RS2_STREAM_FISHEYE,   RS2_FORMAT_RAW8,          width, height,    0, fps},
-        { RS2_STREAM_ACCEL,     RS2_FORMAT_MOTION_XYZ32F,   1,      1,      0, 200},
-        { RS2_STREAM_GYRO,      RS2_FORMAT_MOTION_XYZ32F,   1,      1,      0, 200},
-    };
+        all_profiles = std::vector<profile>(
+        {
+            { RS2_STREAM_DEPTH,     RS2_FORMAT_Z16,           width, height,    0, fps},
+            { RS2_STREAM_COLOR,     RS2_FORMAT_RGB8,          width, height,    0, fps},
+            { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    1, fps},
+            { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    2, fps},
+            { RS2_STREAM_INFRARED,  RS2_FORMAT_Y8,            width, height,    0, fps},
+            { RS2_STREAM_CONFIDENCE,RS2_FORMAT_RAW8,          width, height,    0, fps},
+            { RS2_STREAM_FISHEYE,   RS2_FORMAT_RAW8,          width, height,    0, fps},
+            { RS2_STREAM_ACCEL,     RS2_FORMAT_MOTION_XYZ32F,   1,      1,      0, 200},
+            { RS2_STREAM_GYRO,      RS2_FORMAT_MOTION_XYZ32F,   1,      1,      0, 200},
+        });
+    }
 
     std::vector<profile> profiles;
     std::vector<rs2::stream_profile> modes;
@@ -163,14 +166,14 @@ inline std::vector<profile>  configure_all_supported_streams(rs2::sensor& sensor
     return profiles;
 }
 
-inline std::pair<std::vector<rs2::sensor>, std::vector<profile>> configure_all_supported_streams(rs2::device& dev, int width = 640, int height = 480, int fps = 30)
+inline std::pair<std::vector<rs2::sensor>, std::vector<profile>> configure_all_supported_streams(rs2::device& dev, int width = 640, int height = 480, int fps = 30, std::vector<profile> all_profiles = std::vector<profile>())
 {
     std::vector<profile> profiles;
     std::vector<rs2::sensor> sensors;
     auto sens = dev.query_sensors();
     for (auto s : sens)
     {
-        auto res = configure_all_supported_streams(s, width, height, fps);
+        auto res = configure_all_supported_streams(s, width, height, fps, all_profiles);
         profiles.insert(profiles.end(), res.begin(), res.end());
         if (res.size() > 0)
         {
