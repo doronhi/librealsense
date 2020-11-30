@@ -459,3 +459,68 @@ TEST_CASE("DSO-15050", "[live]")
         }
     }
 }
+
+TEST_CASE("logger-load", "")
+{
+    {
+        // rs2::log_to_file(RS2_LOG_SEVERITY_DEBUG, "lrs_log.txt");
+        rs2::log_to_console(RS2_LOG_SEVERITY_DEBUG);
+        std::vector<std::shared_ptr<std::thread> > threads;
+        const size_t num_threads(10);
+        std::chrono::seconds test_running_time(10);
+        std::chrono::milliseconds thread_sleep_time(10);
+        std::chrono::milliseconds max_delay_time(50);
+        bool is_running(true);
+        std::condition_variable cv;
+        std::mutex m;
+
+
+        for (size_t thread_idx=0; thread_idx < num_threads; thread_idx++)
+        {
+            LOG_INFO("Add thread: " << thread_idx);
+            threads.push_back(std::make_shared<std::thread>([&, thread_idx]()
+            {
+                auto crnt_time = std::chrono::high_resolution_clock::now();
+                auto prev_time = std::chrono::high_resolution_clock::now();
+                while (is_running)
+                {
+                    std::this_thread::sleep_for(thread_sleep_time);
+                    crnt_time = std::chrono::high_resolution_clock::now();
+                    std::chrono::milliseconds diff = std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time - prev_time);
+                    LOG_INFO(std::dec << "thread id:" << thread_idx << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time));
+                    if (crnt_time-prev_time > thread_sleep_time + max_delay_time)
+                    {
+                        LOG_ERROR(std::dec << "thread id:" << thread_idx << ":" << " diff: " << diff.count());
+                        std::unique_lock<std::mutex> lock(m);
+                        is_running = false;
+                        cv.notify_one();
+                    }
+                    prev_time = crnt_time;
+                }
+                LOG_INFO("END thread" << thread_idx);
+            }));
+        }
+        auto start_time = std::chrono::high_resolution_clock::now();
+        {
+            std::unique_lock<std::mutex> lock(m);
+            cv.wait_for(lock, test_running_time, [&] {return (!is_running); });
+        }
+        bool test_ok(is_running);
+        if (!is_running)
+        {
+            std::chrono::seconds diff = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_time);
+            LOG_ERROR("Test failed after " << diff.count() << "(sec)");
+        }
+        else
+        {
+            LOG_INFO("Test succeeded.");
+        }
+        LOG_INFO("Waiting for threads...");
+        is_running = false;
+        for (auto& thread : threads)
+        {
+            thread->join();
+        }
+        REQUIRE(test_ok);
+    }
+}
