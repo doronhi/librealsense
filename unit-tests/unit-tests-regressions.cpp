@@ -15,8 +15,11 @@
 #include <ctime>
 #include <algorithm>
 #include <librealsense2/rsutil.h>
+#include <ctime>
 
 using namespace rs2;
+
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
 TEST_CASE("DSO-14512", "[live]")
 {
@@ -480,6 +483,7 @@ TEST_CASE("logger-load", "")
     {
         rs2::log_to_file(RS2_LOG_SEVERITY_DEBUG, "lrs_log.txt");
         // rs2::log_to_console(RS2_LOG_SEVERITY_DEBUG);
+        std::ofstream fout("fout.log");
         std::vector<std::shared_ptr<std::thread> > threads;
         const size_t num_threads(10);
         std::chrono::seconds test_running_time(60*30);
@@ -489,7 +493,7 @@ TEST_CASE("logger-load", "")
         double _global_counter(0.0);
         std::condition_variable cv;
         std::mutex m;
-
+        bool _break_on_delay(false);
 
         for (size_t thread_idx=0; thread_idx < num_threads; thread_idx++)
         {
@@ -503,7 +507,18 @@ TEST_CASE("logger-load", "")
                     std::this_thread::sleep_for(thread_sleep_time);
                     crnt_time = std::chrono::high_resolution_clock::now();
                     std::chrono::milliseconds diff = std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time - prev_time);
-                    LOG_INFO(std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time));
+                    if (thread_idx == 0)
+                    {
+                        auto now = std::chrono::high_resolution_clock::now();
+                        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+                        auto t_c = std::chrono::system_clock::to_time_t(now);
+                        fout << std::put_time(std::localtime(&t_c), " %d/%m %T.") << std::setfill('0') << std::setw(3) << ms.count() << " INFO [" << std::this_thread::get_id() << "] (" << __FILENAME__ << ":" << __LINE__ << ") ";
+                        fout << std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time) << std::endl;
+                    }
+                    else
+                    {
+                        LOG_INFO(std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time));
+                    }
                     // {
                     //     std::unique_lock<std::mutex> lock(m);
                     //     _global_counter+=(0.1);
@@ -511,9 +526,16 @@ TEST_CASE("logger-load", "")
                     if (crnt_time-prev_time > thread_sleep_time + max_delay_time)
                     {
                         LOG_ERROR(std::dec << "thread id:" << thread_idx << ":" << " diff: " << diff.count());
-                        std::unique_lock<std::mutex> lock(m);
-                        is_running = false;
-                        cv.notify_one();
+                        if (_break_on_delay)
+                        {
+                            std::unique_lock<std::mutex> lock(m);
+                            is_running = false;
+                            cv.notify_one();
+                        }
+                        else
+                        {
+                            std::cout << std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << std::endl;
+                        }
                     }
                     prev_time = crnt_time;
                 }
@@ -534,9 +556,10 @@ TEST_CASE("logger-load", "")
             // }
         }
         bool test_ok(is_running);
+        std::chrono::seconds diff = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_time);
+        CAPTURE(diff.count());
         if (!is_running)
         {
-            std::chrono::seconds diff = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_time);
             LOG_ERROR("Test failed after " << diff.count() << "(sec)");
         }
         else
