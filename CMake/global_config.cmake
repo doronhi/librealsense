@@ -23,6 +23,7 @@ macro(global_set_flags)
 
     add_definitions(-DELPP_THREAD_SAFE)
     add_definitions(-DELPP_NO_DEFAULT_LOG_FILE)
+    add_definitions(-DELPP_EXPERIMENTAL_ASYNC)
 
     if (BUILD_GLSL_EXTENSIONS)
         set(LRS_GL_TARGET realsense2-gl)
