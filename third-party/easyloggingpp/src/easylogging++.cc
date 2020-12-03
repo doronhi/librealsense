@@ -2555,6 +2555,7 @@ MessageBuilder& MessageBuilder::operator<<(const wchar_t* msg) {
 // Writer
 
 Writer& Writer::construct(Logger* logger, bool needLock) {
+  if (!ELPP) return *this;
   m_logger = logger;
   initializeLogger(logger->id(), false, needLock);
   m_messageBuilder.initialize(m_logger);
@@ -2562,6 +2563,7 @@ Writer& Writer::construct(Logger* logger, bool needLock) {
 }
 
 Writer& Writer::construct(int count, const char* loggerIds, ...) {
+  if (!ELPP) return *this;
   if (ELPP->hasFlag(LoggingFlag::MultiLoggerSupport)) {
     va_list loggersList;
     va_start(loggersList, loggerIds);
@@ -2609,6 +2611,8 @@ void Writer::initializeLogger(const std::string& loggerId, bool lookup, bool nee
 }
 
 void Writer::processDispatch() {
+  if (!ELPP) return;
+  
 #if ELPP_LOGGING_ENABLED
   if (ELPP->hasFlag(LoggingFlag::MultiLoggerSupport)) {
     bool firstDispatched = false;
