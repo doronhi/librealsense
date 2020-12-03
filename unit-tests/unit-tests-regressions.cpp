@@ -18,6 +18,8 @@
 
 using namespace rs2;
 
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
 TEST_CASE("DSO-14512", "[live]")
 {
     {
@@ -457,5 +459,103 @@ TEST_CASE("DSO-15050", "[live]")
                 });
             }
         }
+    }
+}
+
+TEST_CASE("logger-load", "")
+{
+    {
+        rs2::log_to_file(RS2_LOG_SEVERITY_DEBUG, "lrs_log.txt");
+        // rs2::log_to_console(RS2_LOG_SEVERITY_DEBUG);
+        std::ofstream fout("fout.log");
+        std::vector<std::shared_ptr<std::thread> > threads;
+        const size_t num_threads(10);
+        std::chrono::seconds test_running_time(60*60);
+        std::chrono::milliseconds thread_sleep_time(1);
+        std::chrono::milliseconds max_delay_time(50);
+        bool is_running(true);
+        double _global_counter(0.0);
+        std::condition_variable cv;
+        std::mutex m;
+        bool _break_on_delay(true);
+
+        for (size_t thread_idx=0; thread_idx < num_threads; thread_idx++)
+        {
+            LOG_INFO("Add thread: " << thread_idx);
+            threads.push_back(std::make_shared<std::thread>([&, thread_idx]()
+            {
+                auto crnt_time = std::chrono::high_resolution_clock::now();
+                auto prev_time = std::chrono::high_resolution_clock::now();
+                while (is_running)
+                {
+                    std::this_thread::sleep_for(thread_sleep_time);
+                    crnt_time = std::chrono::high_resolution_clock::now();
+                    std::chrono::milliseconds diff = std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time - prev_time);
+                    if (thread_idx == 0)
+                    {
+                        auto now = std::chrono::high_resolution_clock::now();
+                        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+                        auto t_c = std::chrono::system_clock::to_time_t(now);
+                        fout << std::put_time(std::localtime(&t_c), " %d/%m %T.") << std::setfill('0') << std::setw(3) << ms.count() << " INFO [" << std::this_thread::get_id() << "] (" << __FILENAME__ << ":" << __LINE__ << ") ";
+                        fout << std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time) << std::endl;
+                    }
+                    else
+                    {
+                        LOG_INFO(std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << "," << (crnt_time-prev_time > thread_sleep_time + max_delay_time));
+                    }
+                    // {
+                    //     std::unique_lock<std::mutex> lock(m);
+                    //     _global_counter+=(0.1);
+                    // }
+                    if (crnt_time-prev_time > thread_sleep_time + max_delay_time)
+                    {
+                        LOG_ERROR(std::dec << "thread id:" << thread_idx << ":" << " diff: " << diff.count());
+                        if (_break_on_delay)
+                        {
+                            std::unique_lock<std::mutex> lock(m);
+                            is_running = false;
+                            cv.notify_one();
+                        }
+                        else
+                        {
+                            std::cout << std::dec << "thread id:" << thread_idx << " crnt_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " diff: " << diff.count() << std::endl;
+                        }
+                    }
+                    prev_time = crnt_time;
+                }
+                LOG_INFO("END thread" << thread_idx);
+            }));
+        }
+        auto start_time = std::chrono::high_resolution_clock::now();
+        while(is_running && std::chrono::high_resolution_clock::now()-start_time < test_running_time)
+        {
+            {
+                std::unique_lock<std::mutex> lock(m);
+                cv.wait_for(lock, std::chrono::seconds(1), [&] {return (!is_running); });
+            }
+            // {
+            //     std::unique_lock<std::mutex> lock(m);
+            //     auto crnt_time = std::chrono::high_resolution_clock::now();
+            //     LOG_INFO("time: " << std::chrono::duration_cast<std::chrono::milliseconds>(crnt_time.time_since_epoch()).count() << " _global_counter=" << _global_counter);
+            // }
+        }
+        bool test_ok(is_running);
+        std::chrono::seconds diff = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_time);
+        CAPTURE(diff.count());
+        if (!is_running)
+        {
+            LOG_ERROR("Test failed after " << diff.count() << "(sec)");
+        }
+        else
+        {
+            LOG_INFO("Test succeeded.");
+        }
+        LOG_INFO("Waiting for threads...");
+        is_running = false;
+        for (auto& thread : threads)
+        {
+            thread->join();
+        }
+        REQUIRE(test_ok);
     }
 }
