@@ -27,13 +27,14 @@ TEST_CASE("logger-load", "")
         // rs2::log_to_console(RS2_LOG_SEVERITY_DEBUG);
         std::vector<std::shared_ptr<std::thread> > threads;
         const size_t num_threads(10);
-        std::chrono::seconds test_running_time(60*30);
+        std::chrono::seconds test_running_time(10);
         std::chrono::milliseconds thread_sleep_time(1);
         std::chrono::milliseconds max_delay_time(50);
         bool is_running(true);
         std::condition_variable cv;
         std::mutex m;
         bool _break_on_delay(true);
+        bool _delete_log_file_on_successful_exit(true);
 
         for (size_t thread_idx=0; thread_idx < num_threads; thread_idx++)
         {
@@ -89,6 +90,10 @@ TEST_CASE("logger-load", "")
         for (auto& thread : threads)
         {
             thread->join();
+        }
+        if (test_ok && _delete_log_file_on_successful_exit)
+        {
+            std::remove("lrs_log.txt");
         }
         REQUIRE(test_ok);
     }
