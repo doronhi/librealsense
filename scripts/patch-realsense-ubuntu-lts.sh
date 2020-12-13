@@ -59,11 +59,11 @@ kernel_name="ubuntu-${ubuntu_codename}-$kernel_branch"
 echo -e "\e[32mCreate patches workspace in \e[93m${kernel_name} \e[32mfolder\n\e[0m"
 
 #Distribution-specific packages
-if [ ${ubuntu_codename} == "bionic" ];
+if { [ ${ubuntu_codename} == "bionic" ] || [ ${ubuntu_codename} == "focal" ];  } ;
 then
 	require_package libelf-dev
 	require_package elfutils
-	#Ubuntu 18.04 kernel 4.18
+	#Ubuntu 18.04 kernel 4.18 + 20.04/ 5.4
 	require_package bison
 	require_package flex
 fi
@@ -83,7 +83,7 @@ cd ${kernel_name}
 #then
 #Search the repository for the tag that matches the mmaj.min.patch-build of Ubuntu kernel
 kernel_full_num=$(echo $LINUX_BRANCH | cut -d '-' -f 1,2)
-kernel_git_tag=$(git ls-remote --tags origin | grep ${kernel_full_num} | grep '[^^{}]$' | tail -n 1 | awk -F/ '{print $NF}')
+kernel_git_tag=$(git ls-remote --tags origin | grep "${kernel_full_num}\." | grep '[^^{}]$' | tail -n 1 | awk -F/ '{print $NF}')
 echo -e "\e[32mFetching Ubuntu LTS tag \e[47m${kernel_git_tag}\e[0m \e[32m to the local kernel sources folder\e[0m"
 git fetch origin tag ${kernel_git_tag} --no-tags
 
@@ -128,9 +128,14 @@ else
 	patch -p1 < ../scripts/realsense-powerlinefrequency-control-fix.patch
 	# Applying 3rd-party patch that affects USB2 behavior
 	# See reference https://patchwork.kernel.org/patch/9907707/
-	if [ ${k_maj_min} -lt 418 ]; then
-		echo -e "\e[32mRetrofit uvc bug fix enabled with 4.18+\e[0m"
-		patch -N -p1 < ../scripts/v1-media-uvcvideo-mark-buffer-error-where-overflow.patch
+	if [ ${k_maj_min} -lt 418 ];
+	then
+		echo -e "\e[32mRetrofit UVC bug fix rectified in 4.18+\e[0m"
+		if patch -N --dry-run -p1 < ../scripts/v1-media-uvcvideo-mark-buffer-error-where-overflow.patch; then
+			patch -N -p1 < ../scripts/v1-media-uvcvideo-mark-buffer-error-where-overflow.patch
+		else
+			echo -e "\e[36m  Skip the patch - it is already found in the source tree\e[0m"
+		fi
 	fi
 	if [ $xhci_patch -eq 1 ]; then
 		echo -e "\e[32mApplying streamoff hotfix patch in videobuf2-core\e[0m"

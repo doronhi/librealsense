@@ -377,8 +377,9 @@ namespace librealsense
         _range = [this]()
         {
             return option_range{ ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT,
-                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_MAX - 1,
-                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT, 1 };
+                                 2,
+                                 1,
+                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT};
         };
     }
 
@@ -402,6 +403,54 @@ namespace librealsense
     }
 
     option_range external_sync_mode::get_range() const
+    {
+        return *_range;
+    }
+
+    external_sync_mode2::external_sync_mode2(hw_monitor& hwm, sensor_base* ep)
+        : _hwm(hwm), _sensor(ep)
+    {
+        _range = [this]()
+        {
+            return option_range{ ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT,
+                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_MAX,
+                                 1,
+                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT };
+        };
+    }
+
+    void external_sync_mode2::set(float value)
+    {
+        if (_sensor->is_streaming())
+            throw std::runtime_error("Cannot change Inter-camera HW synchronization mode while streaming!");
+
+        command cmd(ds::SET_CAM_SYNC);
+        if (value < 4)
+            cmd.param1 = static_cast<int>(value);
+        else
+        {
+            cmd.param1 = 4;
+            cmd.param1 |= (static_cast<int>(value - 3)) << 8;
+        }
+
+        _hwm.send(cmd);
+        _record_action(*this);
+    }
+
+    float external_sync_mode2::query() const
+    {
+        command cmd(ds::GET_CAM_SYNC);
+        auto res = _hwm.send(cmd);
+        if (res.empty())
+            throw invalid_value_exception("external_sync_mode::query result is empty!");
+
+        if (res.front() < 4)
+            return (res.front());
+        else
+            return (static_cast<float>(res[1]) + 3.0f);
+    }
+
+    option_range external_sync_mode2::get_range() const
     {
         return *_range;
     }
@@ -442,8 +491,8 @@ namespace librealsense
         return *_range;
     }
 
-    alternating_emitter_option::alternating_emitter_option(hw_monitor& hwm, sensor_base* ep)
-        : _hwm(hwm), _sensor(ep)
+    alternating_emitter_option::alternating_emitter_option(hw_monitor& hwm, sensor_base* ep, bool is_fw_version_using_id)
+        : _hwm(hwm), _sensor(ep), _is_fw_version_using_id(is_fw_version_using_id)
     {
         _range = [this]()
         {
@@ -454,8 +503,14 @@ namespace librealsense
     void alternating_emitter_option::set(float value)
     {
         std::vector<uint8_t> pattern{};
+
         if (static_cast<int>(value))
-            pattern = ds::alternating_emitter_pattern;
+        {
+            if (_is_fw_version_using_id)
+                pattern = ds::alternating_emitter_pattern;
+            else
+                pattern = ds::alternating_emitter_pattern_with_name;
+        }
 
         command cmd(ds::SETSUBPRESET, static_cast<int>(pattern.size()));
         cmd.data = pattern;
@@ -465,12 +520,140 @@ namespace librealsense
 
     float alternating_emitter_option::query() const
     {
-        command cmd(ds::GETSUBPRESETNAME);
-        auto res = _hwm.send(cmd);
-        if (res.size()>20)
-            throw invalid_value_exception("HWMON::GETSUBPRESETNAME invalid size");
+        if (_is_fw_version_using_id)
+        {
+            float rv = 0.f;
+            command cmd(ds::GETSUBPRESETID);
+            // if no subpreset is streaming, the firmware returns "ON_DATA_TO_RETURN" error
+            try {
+                auto res = _hwm.send(cmd);
+                // if a subpreset is streaming, checking this is the alternating emitter sub preset
+                if (res.size())
+                    rv = (res[0] == ds::ALTERNATING_EMITTER_SUBPRESET_ID) ? 1.0f : 0.f;
+            }
+            catch (...)
+            {
+                rv = 0.f;
+            }
 
-        static std::vector<uint8_t> alt_emitter_name(ds::alternating_emitter_pattern.begin()+2,ds::alternating_emitter_pattern.begin()+22);
-        return (alt_emitter_name == res);
+            return rv;
+        }
+        else
+        {
+            command cmd(ds::GETSUBPRESETID);
+            auto res = _hwm.send(cmd);
+            if (res.size() > 20)
+                throw invalid_value_exception("HWMON::GETSUBPRESETID invalid size");
+
+            static std::vector<uint8_t> alt_emitter_name(ds::alternating_emitter_pattern_with_name.begin() + 2, ds::alternating_emitter_pattern_with_name.begin() + 22);
+            return (alt_emitter_name == res);
+        }
     }
+
+    emitter_always_on_option::emitter_always_on_option(hw_monitor& hwm, sensor_base* ep)
+        : _hwm(hwm), _sensor(ep)
+    {
+        _range = [this]()
+        {
+            return option_range{ 0, 1, 1, 0 };
+        };
+    }
+
+    void emitter_always_on_option::set(float value)
+    {
+        command cmd(ds::LASERONCONST);
+        cmd.param1 = static_cast<int>(value);
+
+        _hwm.send(cmd);
+        _record_action(*this);
+    }
+
+    float emitter_always_on_option::query() const
+    {
+        command cmd(ds::LASERONCONST);
+        cmd.param1 = 2;
+
+        auto res = _hwm.send(cmd);
+        if (res.empty())
+            throw invalid_value_exception("emitter_always_on_option::query result is empty!");
+
+        return (res.front());
+    }
+
+    option_range emitter_always_on_option::get_range() const
+    {
+        return *_range;
+    }
+
+
+    void hdr_option::set(float value)
+    {
+        _hdr_cfg->set(_option, value, _range);
+        _record_action(*this);
+    }
+
+    float hdr_option::query() const
+    {
+        return _hdr_cfg->get(_option);
+    }
+
+    option_range hdr_option::get_range() const
+    {
+        return _range;
+    }
+
+    const char* hdr_option::get_value_description(float val) const
+    {
+        if (_description_per_value.find(val) != _description_per_value.end())
+            return _description_per_value.at(val).c_str();
+        return nullptr;
+    }
+
+
+    void hdr_conditional_option::set(float value)
+    {
+        if (_hdr_cfg->is_config_in_process())
+            _hdr_option->set(value);
+        else
+        {
+            if (_hdr_cfg->is_enabled())
+                LOG_WARNING("The control - " << _uvc_option->get_description()
+                     << " - is locked while HDR mode is active.\n"); 
+            else
+                _uvc_option->set(value);
+        }
+    }
+
+    float hdr_conditional_option::query() const
+    {
+        if (_hdr_cfg->is_config_in_process())
+            return _hdr_option->query();
+        else
+            return _uvc_option->query();
+    }
+
+    option_range hdr_conditional_option::get_range() const
+    {
+        if (_hdr_cfg->is_config_in_process())
+            return _hdr_option->get_range();
+        else
+            return _uvc_option->get_range();
+    }
+
+    const char* hdr_conditional_option::get_description() const
+    {
+        if (_hdr_cfg->is_config_in_process())
+            return _hdr_option->get_description();
+        else
+            return _uvc_option->get_description();
+    }
+
+    bool hdr_conditional_option::is_enabled() const
+    {
+        if (_hdr_cfg->is_config_in_process())
+            return _hdr_option->is_enabled();
+        else
+            return _uvc_option->is_enabled();
+    }
+
 }

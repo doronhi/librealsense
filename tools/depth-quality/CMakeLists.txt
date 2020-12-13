@@ -10,7 +10,23 @@ find_package(Threads REQUIRED)
 
 include_directories(${CMAKE_BINARY_DIR})
 
+if(${BUILD_EASYLOGGINGPP})
+set( ELPP_DIR ../../third-party/easyloggingpp/src )
+
+include_directories( ${ELPP_DIR} )
+set( ELPP_FILES
+    ${ELPP_DIR}/easylogging++.cc
+    ${ELPP_DIR}/easylogging++.h)
+endif()
+
 include(../../common/CMakeLists.txt)
+
+SET(DELAYED 
+    realsense2d.dll
+    realsense2-gld.dll
+    realsense2.dll
+    realsense2-gl.dll
+)
 
 if(BUILD_GRAPHICAL_EXAMPLES)
     set(RS_QUALITY_TOOL_CPP
@@ -32,6 +48,7 @@ if(BUILD_GRAPHICAL_EXAMPLES)
 
     if(WIN32)
         add_executable(rs-depth-quality WIN32 ${RS_QUALITY_TOOL_CPP}
+                ${ELPP_FILES}
                 ${CMAKE_CURRENT_SOURCE_DIR}/res/resource.h
                 ${CMAKE_CURRENT_SOURCE_DIR}/res/realsense-viewer.rc
                 ../../common/windows-app-bootstrap.cpp)
@@ -63,8 +80,17 @@ if(BUILD_GRAPHICAL_EXAMPLES)
                                              ../../third-party/tinyfiledialogs
                                              ${CMAKE_CURRENT_SOURCE_DIR}/res/)
 
+        #list(TRANSFORM DELAYED PREPEND " /DELAYLOAD:")
+        PREPEND(DELAYED " /DELAYLOAD:" ${DELAYED})
+        #infoValue(DELAYED)
+        string(REPLACE ";" " " LD_FLAGS_STR "${DELAYED}")
+        set_target_properties(rs-depth-quality PROPERTIES LINK_FLAGS "${LD_FLAGS_STR}")
+
     else()
-        add_executable(rs-depth-quality ${RS_QUALITY_TOOL_CPP})
+        add_executable(rs-depth-quality 
+        ${RS_QUALITY_TOOL_CPP}
+        ${ELPP_FILES}
+        )
 
         include_directories(rs-depth-quality ../../common  ../../third-party
                                              ../../third-party/imgui
@@ -73,6 +99,15 @@ if(BUILD_GRAPHICAL_EXAMPLES)
                                              ../../third-party/tclap/include)
     endif()
 
+    source_group("EasyLogging++" FILES ${ELPP_FILES})
+    source_group("SW-Update" FILES ${SW_UPDATE_FILES})
+
+    if (CHECK_FOR_UPDATES)
+        message( STATUS "Check for updates capability added to realsense-depth-quality" )
+        add_dependencies(rs-depth-quality libcurl)
+        target_link_libraries(rs-depth-quality curl)
+    endif()
+    
     target_link_libraries(rs-depth-quality ${DEPENDENCIES}
                                            ${GTK3_LIBRARIES}
                                            Threads::Threads
@@ -80,8 +115,11 @@ if(BUILD_GRAPHICAL_EXAMPLES)
 
     if (IMPORT_DEPTH_CAM_FW)
         add_definitions(-DINTERNAL_FW)
-        target_link_libraries(rs-depth-quality uvc_fw)
+        target_link_libraries(rs-depth-quality fw)
     endif()
+    
+    
+
 
     set_target_properties (rs-depth-quality PROPERTIES
         FOLDER Tools

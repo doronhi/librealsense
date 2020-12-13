@@ -33,6 +33,7 @@ typedef enum rs2_camera_info {
     RS2_CAMERA_INFO_PRODUCT_LINE                   , /**< Device product line D400/SR300/L500/T200 */
     RS2_CAMERA_INFO_ASIC_SERIAL_NUMBER             , /**< ASIC serial number */
     RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID             , /**< Firmware update ID */
+    RS2_CAMERA_INFO_IP_ADDRESS                     , /**< IP address for remote camera. */
     RS2_CAMERA_INFO_COUNT                            /**< Number of enumeration values. Not a valid input: intended to be used in for-loops. */
 } rs2_camera_info;
 const char* rs2_camera_info_to_string(rs2_camera_info info);
@@ -86,6 +87,7 @@ typedef enum rs2_format
     RS2_FORMAT_INVI            , /**< 8-bit IR stream.  */
     RS2_FORMAT_W10             , /**< Grey-scale image as a bit-packed array. 4 pixel data stream taking 5 bytes */
     RS2_FORMAT_Z16H            , /**< Variable-length Huffman-compressed 16-bit depth values. */
+    RS2_FORMAT_FG              , /**< 16-bit per-pixel frame grabber format. */
     RS2_FORMAT_COUNT             /**< Number of enumeration values. Not a valid input: intended to be used in for-loops. */
 } rs2_format;
 const char* rs2_format_to_string(rs2_format format);
@@ -317,11 +319,27 @@ const char* rs2_get_notification_serialized_data(rs2_notification* notification,
 
 /**
 * check if physical subdevice is supported
-* \param[in] device  input RealSense device
+* \param[in] sensor  input RealSense subdevice
 * \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored
 * \return            list of stream profiles that given subdevice can provide, should be released by rs2_delete_profiles_list
 */
-rs2_stream_profile_list* rs2_get_stream_profiles(rs2_sensor* device, rs2_error** error);
+rs2_stream_profile_list* rs2_get_stream_profiles(rs2_sensor* sensor, rs2_error** error);
+
+/**
+* retrieve list of debug stream profiles that given subdevice can provide
+* \param[in] sensor  input RealSense subdevice
+* \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+* \return            list of debug stream profiles that given subdevice can provide, should be released by rs2_delete_profiles_list
+*/
+rs2_stream_profile_list * rs2_get_debug_stream_profiles( rs2_sensor * sensor, rs2_error ** error );
+
+/**
+* check how subdevice is streaming
+* \param[in] sensor  input RealSense subdevice
+* \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+* \return            list of stream profiles that given subdevice is currently streaming, should be released by rs2_delete_profiles_list
+*/
+rs2_stream_profile_list* rs2_get_active_streams(rs2_sensor* sensor, rs2_error** error);
 
 /**
 * Get pointer to specific stream profile
@@ -456,6 +474,17 @@ void rs2_register_extrinsics(const rs2_stream_profile* from,
     rs2_extrinsics extrin, rs2_error** error);
 
 /**
+ * \brief Override extrinsics of a given sensor that supports calibrated_sensor.
+ *
+ * This will affect extrinsics at the source device and may affect multiple profiles. Used for DEPTH_TO_RGB calibration.
+ *
+* \param[in] sensor       The sensor
+* \param[in] extrinsics   Extrinsics from Depth to the named sensor
+* \param[out] error       If non-null, receives any error that occurs during this call, otherwise, errors are ignored
+*/
+void rs2_override_extrinsics( const rs2_sensor* sensor, const rs2_extrinsics* extrinsics, rs2_error** error );
+
+/**
  * When called on a video profile, returns the intrinsics of specific stream configuration
  * \param[in] mode          input stream profile
  * \param[out] intrinsics   resulting intrinsics for the video profile
@@ -464,7 +493,7 @@ void rs2_register_extrinsics(const rs2_stream_profile* from,
 void rs2_get_video_stream_intrinsics(const rs2_stream_profile* mode, rs2_intrinsics* intrinsics, rs2_error** error);
 
 /**
- * Returns the list of recommended processing blocks for a specific sensor. 
+ * Returns the list of recommended processing blocks for a specific sensor.
  * Order and configuration of the blocks are decided by the sensor
  * \param[in] sensor          input sensor
  * \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored
@@ -571,6 +600,17 @@ int rs2_send_wheel_odometry(const rs2_sensor* sensor, char wo_sensor_id, unsigne
 void rs2_set_intrinsics(const rs2_sensor* sensor, const rs2_stream_profile* profile , const rs2_intrinsics* intrinsics, rs2_error** error);
 
 /**
+ * \brief Override intrinsics of a given sensor that supports calibrated_sensor.
+ *
+ * This will affect intrinsics at the source and may affect multiple profiles. Used for DEPTH_TO_RGB calibration.
+ *
+* \param[in] sensor       The RealSense device
+* \param[in] intrinsics   Intrinsics value to be written to the sensor
+* \param[out] error       If non-null, receives any error that occurs during this call, otherwise, errors are ignored
+*/
+void rs2_override_intrinsics( const rs2_sensor* sensor, const rs2_intrinsics* intrinsics, rs2_error** error );
+
+/**
  * Set extrinsics between two sensors
  * \param[in]  from_sensor  Origin sensor
  * \param[in]  from_profile Origin profile
@@ -582,6 +622,32 @@ void rs2_set_intrinsics(const rs2_sensor* sensor, const rs2_stream_profile* prof
 void rs2_set_extrinsics(const rs2_sensor* from_sensor, const rs2_stream_profile* from_profile, rs2_sensor* to_sensor, const rs2_stream_profile* to_profile, const rs2_extrinsics* extrinsics, rs2_error** error);
 
 /**
+ * Get the DSM parameters for a sensor
+ * \param[in]  sensor        Sensor that supports the CALIBRATED_SENSOR extension
+ * \param[out] p_params_out  Pointer to the structure that will get the DSM parameters
+ * \param[out] error         If non-null, receives any error that occurs during this call, otherwise, errors are ignored
+ */
+void rs2_get_dsm_params( rs2_sensor const * sensor, rs2_dsm_params * p_params_out, rs2_error** error );
+
+/**
+ * Set the sensor DSM parameters
+ * This should ideally be done when the stream is NOT running. If it is, the
+ * parameters may not take effect immediately.
+ * \param[in]  sensor        Sensor that supports the CALIBRATED_SENSOR extension
+ * \param[out] p_params      Pointer to the structure that contains the DSM parameters
+ * \param[out] error         If non-null, receives any error that occurs during this call, otherwise, errors are ignored
+ */
+void rs2_override_dsm_params( rs2_sensor const * sensor, rs2_dsm_params const * p_params, rs2_error** error );
+
+/**
+ * Reset the sensor DSM parameters
+ * This should ideally be done when the stream is NOT running. May not take effect immediately.
+ * \param[in]  sensor        Sensor that supports the CALIBRATED_SENSOR extension
+ * \param[out] error         If non-null, receives any error that occurs during this call, otherwise, errors are ignored
+ */
+void rs2_reset_sensor_calibration( rs2_sensor const * sensor, rs2_error** error );
+
+/**
 * Set motion device intrinsics
 * \param[in]  sensor       Motion sensor 
 * \param[in]  profile      Motion stream profile
@@ -590,6 +656,12 @@ void rs2_set_extrinsics(const rs2_sensor* from_sensor, const rs2_stream_profile*
 */
 void rs2_set_motion_device_intrinsics(const rs2_sensor* sensor, const rs2_stream_profile* profile, const rs2_motion_device_intrinsic* intrinsics, rs2_error** error);
 
+/** When called on a depth sensor, this method will return the maximum range of the camera given the amount of ambient light in the scene
+* \param[in] sensor      depth sensor
+* \param[out] error      if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+* \return                the max usable range in meters
+*/
+float rs2_get_max_usable_depth_range(rs2_sensor const * sensor, rs2_error** error);
 
 #ifdef __cplusplus
 }

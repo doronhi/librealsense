@@ -80,9 +80,11 @@ namespace librealsense
             case ds::RS435_RGB_PID:
             case ds::RS435I_PID:
             case ds::RS465_PID:
+            case ds::RS405_PID:
+            case ds::RS455_PID:
                 default_430(p);
                 break;
-            case ds::RS405_PID:
+            case ds::RS405U_PID:
                 default_405(p);
                 break;
             case ds::RS400_PID:
@@ -154,7 +156,7 @@ namespace librealsense
             case ds::RS400_PID:
             case ds::RS410_PID:
             case ds::RS415_PID:
-            case ds::RS465_PID://TODO: verify 
+            case ds::RS465_PID://TODO: verify
                 d415_remove_ir(p);
                 break;
             case ds::RS460_PID:

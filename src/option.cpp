@@ -1,9 +1,8 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2015 Intel Corporation. All Rights Reserved.
-
 #include "option.h"
 #include "sensor.h"
-#include "error-handling.h"
+
 
 bool librealsense::option_base::is_valid(float value) const
 {
@@ -102,7 +101,7 @@ const char* librealsense::uvc_pu_option::get_description() const
     case RS2_OPTION_ENABLE_AUTO_EXPOSURE: return "Enable / disable auto-exposure";
     case RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE: return "Enable / disable auto-white-balance";
     case RS2_OPTION_POWER_LINE_FREQUENCY: return "Power Line Frequency";
-    case RS2_OPTION_AUTO_EXPOSURE_PRIORITY: return "Limit exposure time when auto-exposure is ON to preserve constant fps rate";
+    case RS2_OPTION_AUTO_EXPOSURE_PRIORITY: return "Restrict Auto-Exposure to enforce constant FPS rate. Turn ON to remove the restrictions (may result in FPS drop)";
     default: return _ep.get_option_name(_id);
     }
 }
@@ -142,6 +141,12 @@ std::vector<uint8_t> librealsense::command_transfer_over_xu::send_receive(const 
         });
 }
 
+librealsense::polling_errors_disable::~polling_errors_disable()
+{
+    if (auto handler = _polling_error_handler.lock())
+        handler->stop();
+}
+
 void librealsense::polling_errors_disable::set(float value)
 {
     if (value < 0)
@@ -149,13 +154,19 @@ void librealsense::polling_errors_disable::set(float value)
 
     if (value == 0)
     {
-        _polling_error_handler->stop();
-        _value = 0;
+        if (auto handler = _polling_error_handler.lock())
+        {
+            handler->stop();
+            _value = 0;
+        }
     }
     else
     {
-        _polling_error_handler->start();
-        _value = 1;
+        if (auto handler = _polling_error_handler.lock())
+        {
+            handler->start();
+            _value = 1;
+        }
     }
     _recording_function(*this);
 }

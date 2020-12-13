@@ -66,7 +66,6 @@ namespace librealsense
     private:
         bool try_get(const frame& frm, rs2_metadata_type& result) const
         {
-            auto pair_size = (sizeof(rs2_frame_metadata_value) + sizeof(rs2_metadata_type));
             const uint8_t* pos = frm.additional_data.metadata_blob.data();
             while (pos <= frm.additional_data.metadata_blob.data() + frm.additional_data.metadata_blob.size())
             {
@@ -322,11 +321,12 @@ namespace librealsense
         double get_fps(const librealsense::frame & frm)
         {
             // A computation involving unsigned operands can never overflow (ISO/IEC 9899:1999 (E) \A76.2.5/9)
-            auto num_of_frames = frm.additional_data.frame_number - frm.additional_data.last_frame_number;
+            // In case of frame counter reset fallback use fps from the stream configuration
+            auto num_of_frames = (frm.additional_data.frame_number) ? frm.additional_data.frame_number - frm.additional_data.last_frame_number : 0;
 
             if (num_of_frames == 0)
             {
-                LOG_INFO("frame_number - last_frame_number " << num_of_frames);
+                LOG_INFO("Frame counter reset");
             }
 
             auto diff = num_of_frames ? (double)(frm.additional_data.timestamp - frm.additional_data.last_timestamp) / (double)num_of_frames : 0;
@@ -339,7 +339,7 @@ namespace librealsense
     {
     public:
         ds5_md_attribute_actual_fps(bool discrete = true, attrib_modifyer  exposure_mod = [](const rs2_metadata_type& param) {return param; })
-            :_exposure_modifyer(exposure_mod), _discrete(discrete), _fps_values{ 6, 15, 30, 60, 90 }
+            : _fps_values{ 6, 15, 30, 60, 90 } , _exposure_modifyer(exposure_mod), _discrete(discrete)
         {}
 
         rs2_metadata_type get(const librealsense::frame & frm) const override

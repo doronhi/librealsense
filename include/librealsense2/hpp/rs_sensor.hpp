@@ -99,7 +99,6 @@ namespace rs2
     };
 
 
-
     class sensor : public options
     {
     public:
@@ -213,7 +212,6 @@ namespace rs2
             error::handle(e);
         }
 
-
         /**
         * Retrieves the list of stream profiles supported by the sensor.
         * \return   list of stream profiles that given sensor can provide
@@ -225,6 +223,33 @@ namespace rs2
             rs2_error* e = nullptr;
             std::shared_ptr<rs2_stream_profile_list> list(
                 rs2_get_stream_profiles(_sensor.get(), &e),
+                rs2_delete_stream_profiles_list);
+            error::handle(e);
+
+            auto size = rs2_get_stream_profiles_count(list.get(), &e);
+            error::handle(e);
+
+            for (auto i = 0; i < size; i++)
+            {
+                stream_profile profile(rs2_get_stream_profile(list.get(), i, &e));
+                error::handle(e);
+                results.push_back(profile);
+            }
+
+            return results;
+        }
+
+        /**
+        * Retrieves the list of stream profiles currently streaming on the sensor.
+        * \return list of stream profiles that given sensor is streaming
+        */
+        std::vector<stream_profile> get_active_streams() const
+        {
+            std::vector<stream_profile> results{};
+
+            rs2_error* e = nullptr;
+            std::shared_ptr<rs2_stream_profile_list> list(
+                rs2_get_active_streams(_sensor.get(), &e),
                 rs2_delete_stream_profiles_list);
             error::handle(e);
 
@@ -636,6 +661,140 @@ namespace rs2
 
         operator bool() const { return _sensor.get() != nullptr; }
         explicit wheel_odometer(std::shared_ptr<rs2_sensor> dev) : wheel_odometer(sensor(dev)) {}
+    };
+
+    class calibrated_sensor : public sensor
+    {
+    public:
+        calibrated_sensor( sensor s )
+            : sensor( s.get() )
+        {
+            rs2_error* e = nullptr;
+            if( rs2_is_sensor_extendable_to( _sensor.get(), RS2_EXTENSION_CALIBRATED_SENSOR, &e ) == 0 && !e )
+            {
+                _sensor.reset();
+            }
+            error::handle( e );
+        }
+
+        operator bool() const { return _sensor.get() != nullptr; }
+
+        /** Override the intrinsics at the sensor level, as DEPTH_TO_RGB calibration does */
+        void override_intrinsics( rs2_intrinsics const& intr )
+        {
+            rs2_error* e = nullptr;
+            rs2_override_intrinsics( _sensor.get(), &intr, &e );
+            error::handle( e );
+        }
+
+        /** Override the intrinsics at the sensor level, as DEPTH_TO_RGB calibration does */
+        void override_extrinsics( rs2_extrinsics const& extr )
+        {
+            rs2_error* e = nullptr;
+            rs2_override_extrinsics( _sensor.get(), &extr, &e );
+            error::handle( e );
+        }
+
+        /** Override the intrinsics at the sensor level, as DEPTH_TO_RGB calibration does */
+        rs2_dsm_params get_dsm_params() const
+        {
+            rs2_error* e = nullptr;
+            rs2_dsm_params params;
+            rs2_get_dsm_params( _sensor.get(), &params, &e );
+            error::handle( e );
+            return params;
+        }
+
+        /** Set the sensor DSM parameters
+         * This should ideally be done when the stream is NOT running. If it is, the
+         * parameters may not take effect immediately. */
+        void override_dsm_params( rs2_dsm_params const & params )
+        {
+            rs2_error* e = nullptr;
+            rs2_override_dsm_params( _sensor.get(), &params, &e );
+            error::handle( e );
+        }
+
+        /** Reset the sensor DSM calibration
+         */
+        void reset_calibration()
+        {
+            rs2_error* e = nullptr;
+            rs2_reset_sensor_calibration( _sensor.get(), &e );
+            error::handle( e );
+        }
+    };
+
+    class max_usable_range_sensor : public sensor
+    {
+    public:
+        max_usable_range_sensor(sensor s)
+            : sensor(s.get())
+        {
+            rs2_error* e = nullptr;
+            if (rs2_is_sensor_extendable_to(_sensor.get(), RS2_EXTENSION_MAX_USABLE_RANGE_SENSOR, &e) == 0 && !e)
+            {
+                _sensor.reset();
+            }
+            error::handle(e);
+        }
+
+        operator bool() const { return _sensor.get() != nullptr; }
+
+        /** Retrieves the maximum range of the camera given the amount of ambient light in the scene.
+        * \return max usable range in meters
+        */
+        float get_max_usable_depth_range() const
+        {
+            rs2_error* e = nullptr;
+            auto res = rs2_get_max_usable_depth_range(_sensor.get(), &e);
+            error::handle(e);
+            return res;
+        }
+    };
+
+    class debug_stream_sensor : public sensor
+    {
+    public:
+        debug_stream_sensor( sensor s )
+            : sensor( s.get() )
+        {
+            rs2_error * e = nullptr;
+            if( rs2_is_sensor_extendable_to( _sensor.get(), RS2_EXTENSION_DEBUG_STREAM_SENSOR, &e ) == 0 && ! e )
+            {
+                _sensor.reset();
+            }
+            error::handle( e );
+        }
+
+        operator bool() const { return _sensor.get() != nullptr; }
+
+        /**
+        * Retrieves the list of debug stream profiles supported by the sensor.
+        * \return   list of debug stream profiles that given sensor can provide
+        */
+        std::vector< stream_profile > get_debug_stream_profiles() const
+        {
+            std::vector< stream_profile > results;
+
+            rs2_error * e = nullptr;
+            std::shared_ptr< rs2_stream_profile_list > list(
+                rs2_get_debug_stream_profiles( _sensor.get(), &e ),
+                rs2_delete_stream_profiles_list );
+            error::handle( e );
+
+            auto size = rs2_get_stream_profiles_count( list.get(), &e );
+            error::handle( e );
+
+            for( auto i = 0; i < size; i++ )
+            {
+                stream_profile profile( rs2_get_stream_profile( list.get(), i, &e ) );
+                error::handle( e );
+                results.push_back( profile );
+            }
+
+            return results;
+        }
     };
 }
 #endif // LIBREALSENSE_RS2_SENSOR_HPP

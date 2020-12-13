@@ -32,7 +32,6 @@ namespace librealsense
         virtual ~option() = default;
     };
 
-
     class options_interface : public recordable<options_interface>
     {
     public:
@@ -73,6 +72,17 @@ namespace librealsense
             return *it->second;
         }
 
+        std::shared_ptr<option> get_option_handler(rs2_option id)
+        {
+            return (const_cast<const options_container*>(this)->get_option_handler(id));
+        }
+
+        std::shared_ptr<option> get_option_handler(rs2_option id) const
+        {
+            auto it = _options.find(id);
+            return (it == _options.end() ? std::shared_ptr<option>(nullptr) : it->second);
+        }
+
         void register_option(rs2_option id, std::shared_ptr<option> option)
         {
             _options[id] = option;
@@ -111,7 +121,7 @@ namespace librealsense
             return get_string(option);
         }
 
-    private:
+    protected:
         std::map<rs2_option, std::shared_ptr<option>> _options;
         std::function<void(const options_interface&)> _recording_function = [](const options_interface&) {};
     };

@@ -10,7 +10,6 @@
 
 #include "tm-info.h"
 #include "tm-device.h"
-#include "libusb.h"
 #include "common/fw/target.h"
 
 namespace librealsense
@@ -44,16 +43,19 @@ namespace librealsense
         std::shared_ptr<context> ctx,
         std::vector<platform::usb_device_info>& usb)
     {
+        std::vector<std::shared_ptr<device_info>> results;
         // We shouldn't talk to the device here, it might not
         // even be around anymore (this gets called with an out of
         // date list on disconnect).
         auto correct_pid = filter_by_product(usb, { 0x0B37 });
-        LOG_INFO("Picked " << correct_pid.size() << "/" << usb.size() << " devices");
+        if (correct_pid.size())
+        {
+            LOG_INFO("Picked " << correct_pid.size() << "/" << usb.size() << " devices");
 
-        std::vector<std::shared_ptr<device_info>> results;
+            for(auto & dev : correct_pid)
+                results.push_back(std::make_shared<tm2_info>(ctx, dev));
+        }
 
-        for(auto & dev : correct_pid)
-            results.push_back(std::make_shared<tm2_info>(ctx, dev));
         return results;
     }
 }

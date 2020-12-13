@@ -9,7 +9,12 @@
 #include <rs-vino/detected-object.h>
 
 #include <easylogging++.h>
+#ifdef BUILD_SHARED_LIBS
+// With static linkage, ELPP is initialized by librealsense, so doing it here will
+// create errors. When we're using the shared .so/.dll, the two are separate and we have
+// to initialize ours if we want to use the APIs!
 INITIALIZE_EASYLOGGINGPP
+#endif
 
 
 namespace openvino = InferenceEngine;
@@ -35,7 +40,10 @@ int main(int argc, char * argv[]) try
     openvino_helpers::error_listener error_listener;
     engine.SetLogCallback( error_listener );
     std::string const device_name { "CPU" };
+
+#ifdef OPENVINO2019
     engine.AddExtension( std::make_shared< openvino::Extensions::Cpu::CpuExtensions >(), device_name );
+#endif
 
     openvino_helpers::object_detection faceDetector(
         "face-detection-adas-0001.xml",

@@ -8,13 +8,37 @@ find_package(Threads REQUIRED)
 
 set(DEPENDENCIES realsense2)
 
+find_package (Python3 COMPONENTS Interpreter Development)
+if (NOT ${BUILD_EASYLOGGINGPP})
+    message(FATAL_ERROR "Unit tests are not supported without BUILD_EASYLOGGINGPP; Check BUILD_EASYLOGGINGPP to run them.")
+endif()
+
+if(Python3_FOUND)
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/unit-test-config.py ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+        RESULT_VARIABLE rv
+    )
+    if( NOT ${rv} EQUAL 0 )
+        message(FATAL_ERROR "unit-test-config has failed with status = ${rv}")
+    endif()
+    add_subdirectory( ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build )
+else()
+    message(WARNING "Python 3 was not found; Unit tests will be limited!")
+endif()
+
+
 set (unit_tests_sources
     unit-tests-live.cpp
+    unit-tests-hdr.cpp
+    unit-tests-regressions.cpp
     unit-tests-post-processing.cpp
     unit-tests-post-processing.h
     unit-tests-main.cpp
     unit-tests-common.h
     unit-tests-post-processing-from-bag.cpp
+    unit-test-long.cpp
+    catch.h
+    approx.h
 )
 
 add_executable(live-test ${unit_tests_sources})
@@ -78,6 +102,7 @@ list(APPEND PP_Tests_List  1551257764229 # D415_DS(2)
 # For each post-processing test pattern the following files shall be present
 list(APPEND PP_Test_extensions_List .Input.raw .Input.csv .Output.raw .Output.csv)
 
+
 set_property(GLOBAL PROPERTY sequence_extensions_list)
 function(produce_sequence_extensions source target)
     # Check if metadata file exist, and download if needed
@@ -122,17 +147,22 @@ endfunction()
 
 function(is_file_empty empty filename)
     set (data "")
-    if(EXISTS ${filename})
-        file(STRINGS  ${filename} data)
-    endif()
-    string(LENGTH "${data}" data_length)
-    #message(STATUS "Read ${data_length}  bytes from  ${filename}")
     set(res TRUE)
-    if (NOT ${data_length} STREQUAL "0")
-        set(res FALSE)
+    if(EXISTS ${filename})
+    	# Travis has CMake 3.5.1... no SIZE support!
+        #file(SIZE ${filename} data_length)
+        file(READ ${filename} data LIMIT 2 HEX)
+        string(LENGTH "${data}" data_length)
+        if (NOT ${data_length} STREQUAL "0")
+            set(res FALSE)
+	#else()
+        #    message(STATUS "${data_length}  bytes from  ${filename}")
+        endif()
     endif()
     set(empty ${res} PARENT_SCOPE)
 endfunction()
+
+
 
 set(PP_TESTS_URL http://realsense-hw-public.s3.amazonaws.com/rs-tests/post_processing_tests_2018_ww18/)
 message(STATUS "Preparing to download Post-processing tests dataset...\nRemote server: ${PP_TESTS_URL}\nTarget Location: ${Deployment_Location}\n")
@@ -171,7 +201,7 @@ foreach(i ${PP_Tests_List})
   endforeach(ext)
 endforeach(i)
 
-list(APPEND PP_Rosbag_Recordings_List  
+list(APPEND PP_Rosbag_Recordings_List
     [aligned_2c]_all_combinations_depth_color.bag
     [aligned_2d]_all_combinations_depth_color.bag
     all_combinations_depth_color.bag
@@ -193,3 +223,6 @@ endforeach(i)
 if(NOT ${BUILD_SHARED_LIBS} AND ${BUILD_INTERNAL_UNIT_TESTS})
     add_subdirectory(internal)
 endif()
+
+include(algo/CMakeLists.txt)
+

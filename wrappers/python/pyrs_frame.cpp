@@ -2,7 +2,7 @@
 Copyright(c) 2017 Intel Corporation. All Rights Reserved. */
 
 #include "python.hpp"
-#include "../include/librealsense2/hpp/rs_frame.hpp"
+#include "../include/librealsense2/rs.hpp"
 
 void init_frame(py::module &m) {
     py::class_<BufData> BufData_py(m, "BufData", py::buffer_protocol());
@@ -130,8 +130,26 @@ void init_frame(py::module &m) {
         .def(BIND_DOWNCAST(frame, video_frame))
         .def(BIND_DOWNCAST(frame, depth_frame))
         .def(BIND_DOWNCAST(frame, motion_frame))
-        .def(BIND_DOWNCAST(frame, pose_frame));
+        .def(BIND_DOWNCAST(frame, pose_frame))
         // No apply_filter?
+        .def( "__repr__", []( const rs2::frame &self )
+        {
+            std::stringstream ss;
+            ss << "<" << SNAME << ".frame";
+            if( auto fs = self.as< rs2::frameset >() )
+            {
+                ss << "set";
+                for( auto sf : fs )
+                    ss << " " << rs2_format_to_string( sf.get_profile().format() );
+            }
+            else
+            {
+                ss << " " << rs2_format_to_string( self.get_profile().format() );
+            }
+            ss << " #" << self.get_frame_number();
+            ss << ">";
+            return ss.str();
+        });
 
     py::class_<rs2::video_frame, rs2::frame> video_frame(m, "video_frame", "Extends the frame class with additional video related attributes and functions.");
     video_frame.def(py::init<rs2::frame>())
@@ -207,7 +225,8 @@ void init_frame(py::module &m) {
 
     py::class_<rs2::depth_frame, rs2::video_frame> depth_frame(m, "depth_frame", "Extends the video_frame class with additional depth related attributes and functions.");
     depth_frame.def(py::init<rs2::frame>())
-        .def("get_distance", &rs2::depth_frame::get_distance, "x"_a, "y"_a, "Provide the depth in meters at the given pixel");
+        .def("get_distance", &rs2::depth_frame::get_distance, "x"_a, "y"_a, "Provide the depth in meters at the given pixel")
+        .def("get_units", &rs2::depth_frame::get_units, "Provide the scaling factor to use when converting from get_data() units to meters");
     
     // rs2::disparity_frame
     py::class_<rs2::disparity_frame, rs2::depth_frame> disparity_frame(m, "disparity_frame", "Extends the depth_frame class with additional disparity related attributes and functions.");

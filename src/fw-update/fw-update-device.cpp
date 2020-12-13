@@ -73,8 +73,9 @@ namespace librealsense
 
         std::string lock_status = _is_dfu_locked ? "device is locked" : "device is unlocked";
         LOG_INFO("This device is in DFU mode, previously-installed firmware: " << _last_fw_version <<
-            ", the highest firmware ever installed: " << _highest_fw_version <<
-            ", DFU status: " << lock_status);
+            ", the highest firmware ever installed: " << _highest_fw_version);
+
+        LOG_INFO("DFU status: " << lock_status << " , DFU version is: " << payload.dfu_version);
     }
 
     bool update_device::wait_for_state(std::shared_ptr<platform::usb_messenger> messenger, const rs2_dfu_state state, size_t timeout) const 
@@ -111,13 +112,23 @@ namespace librealsense
     update_device::update_device(const std::shared_ptr<context>& ctx, bool register_device_notifications, std::shared_ptr<platform::usb_device> usb_device)
         : _context(ctx), _usb_device(usb_device)
     {
-        auto messenger = _usb_device->open(FW_UPDATE_INTERFACE_NUMBER);
+        if (auto messenger = _usb_device->open(FW_UPDATE_INTERFACE_NUMBER))
+        {
+            auto state = get_dfu_state(messenger);
+            LOG_DEBUG("DFU state is: " << state);
+            if (state != RS2_DFU_STATE_DFU_IDLE)
+                detach(messenger);
 
-        auto state = get_dfu_state(messenger);
-        if (state != RS2_DFU_STATE_DFU_IDLE)
-            detach(messenger);
-
-        read_device_info(messenger);
+            read_device_info(messenger);
+        }
+        else
+        {
+            std::stringstream s;
+            s << "access failed for " << std::hex <<  _usb_device->get_info().vid << ":"
+              <<_usb_device->get_info().pid << " uid: " <<  _usb_device->get_info().id << std::dec;
+            LOG_ERROR(s.str().c_str());
+            throw std::runtime_error(s.str().c_str());
+        }
     }
 
     update_device::~update_device()

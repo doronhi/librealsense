@@ -73,6 +73,7 @@ namespace librealsense
         int m_before_start_callback_token;
         device_interface& m_parent_device;
         bool m_is_sensor_hooked;
+        bool m_register_notification_to_base;
         std::mutex m_mutex;
     };
 
@@ -88,6 +89,7 @@ namespace librealsense
         }
         void release() override { delete this; }
     };
+
     class frame_holder_callback : public rs2_frame_callback
     {
         std::function<void(frame_holder)> on_frame_function;

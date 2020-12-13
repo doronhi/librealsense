@@ -2,6 +2,7 @@
 Copyright(c) 2017 Intel Corporation. All Rights Reserved. */
 
 #include "python.hpp"
+#include "../include/librealsense2/hpp/rs_internal.hpp"
 #include "../include/librealsense2/hpp/rs_device.hpp"
 #include "../include/librealsense2/hpp/rs_record_playback.hpp" // for downcasts
 
@@ -31,6 +32,8 @@ void init_device(py::module &m) {
         .def(BIND_DOWNCAST(device, updatable))
         .def(BIND_DOWNCAST(device, update_device))
         .def(BIND_DOWNCAST(device, auto_calibrated_device))
+        .def(BIND_DOWNCAST(device, device_calibration))
+        .def(BIND_DOWNCAST(device, firmware_logger))
         .def("__repr__", [](const rs2::device &self) {
             std::stringstream ss;
             ss << "<" SNAME ".device: " << self.get_info(RS2_CAMERA_INFO_NAME)
@@ -46,28 +49,29 @@ void init_device(py::module &m) {
         .def("enter_update_state", &rs2::updatable::enter_update_state, "Move the device to update state, this will cause the updatable device to disconnect and reconnect as an update device.")
         .def("create_flash_backup", (std::vector<uint8_t>(rs2::updatable::*)() const) &rs2::updatable::create_flash_backup,
              "Create backup of camera flash memory. Such backup does not constitute valid firmware image, and cannot be "
-             "loaded back to the device, but it does contain all calibration and device information.")
+             "loaded back to the device, but it does contain all calibration and device information.", py::call_guard<py::gil_scoped_release>())
         .def("create_flash_backup", [](rs2::updatable& self, std::function<void(float)> f) { return self.create_flash_backup(f); },
              "Create backup of camera flash memory. Such backup does not constitute valid firmware image, and cannot be "
              "loaded back to the device, but it does contain all calibration and device information.",
-             "callback"_a)
+             "callback"_a, py::call_guard<py::gil_scoped_release>())
         .def("update_unsigned", (void(rs2::updatable::*)(const std::vector<uint8_t>&, int) const) &rs2::updatable::update_unsigned,
-             "Update an updatable device to the provided unsigned firmware. This call is executed on the caller's thread.", "fw_image"_a, "update_mode"_a = RS2_UNSIGNED_UPDATE_MODE_UPDATE)
+             "Update an updatable device to the provided unsigned firmware. This call is executed on the caller's thread.", "fw_image"_a,
+             "update_mode"_a = RS2_UNSIGNED_UPDATE_MODE_UPDATE, py::call_guard<py::gil_scoped_release>())
         .def("update_unsigned", [](rs2::updatable& self, const std::vector<uint8_t>& fw_image, std::function<void(float)> f, int update_mode) { return self.update_unsigned(fw_image, f, update_mode); },
              "Update an updatable device to the provided unsigned firmware. This call is executed on the caller's thread and it supports progress notifications via the callback.",
-             "fw_image"_a, "callback"_a, "update_mode"_a = RS2_UNSIGNED_UPDATE_MODE_UPDATE);
+             "fw_image"_a, "callback"_a, "update_mode"_a = RS2_UNSIGNED_UPDATE_MODE_UPDATE, py::call_guard<py::gil_scoped_release>());
 
     py::class_<rs2::update_device, rs2::device> update_device(m, "update_device");
     update_device.def(py::init<rs2::device>())
         .def("update", [](rs2::update_device& self, const std::vector<uint8_t>& fw_image) { return self.update(fw_image); },
-             "Update an updatable device to the provided firmware. This call is executed on the caller's thread.", "fw_image"_a)
+             "Update an updatable device to the provided firmware. This call is executed on the caller's thread.", "fw_image"_a, py::call_guard<py::gil_scoped_release>())
         .def("update", [](rs2::update_device& self, const std::vector<uint8_t>& fw_image, std::function<void(float)> f) { return self.update(fw_image, f); },
              "Update an updatable device to the provided firmware. This call is executed on the caller's thread and it supports progress notifications via the callback.",
-             "fw_image"_a, "callback"_a);
+             "fw_image"_a, "callback"_a, py::call_guard<py::gil_scoped_release>());
 
     py::class_<rs2::auto_calibrated_device, rs2::device> auto_calibrated_device(m, "auto_calibrated_device");
     auto_calibrated_device.def(py::init<rs2::device>(), "device"_a)
-        .def("write_calibration", &rs2::auto_calibrated_device::write_calibration, "Write calibration that was set by set_calibration_table to device's EEPROM.")
+        .def("write_calibration", &rs2::auto_calibrated_device::write_calibration, "Write calibration that was set by set_calibration_table to device's EEPROM.", py::call_guard<py::gil_scoped_release>())
         .def("run_on_chip_calibration", [](rs2::auto_calibrated_device& self, std::string json_content, int timeout_ms)
         { 
             float health;
@@ -89,6 +93,37 @@ void init_device(py::module &m) {
         .def("get_calibration_table", &rs2::auto_calibrated_device::get_calibration_table, "Read current calibration table from flash.")
         .def("set_calibration_table", &rs2::auto_calibrated_device::set_calibration_table, "Set current table to dynamic area.")
         .def("reset_to_factory_calibration", &rs2::auto_calibrated_device::reset_to_factory_calibration, "Reset device to factory calibration.");
+
+    py::class_<rs2::device_calibration, rs2::device> device_calibration( m, "device_calibration" );
+    device_calibration.def( py::init<rs2::device>(), "device"_a )
+        .def( "trigger_device_calibration",
+            []( rs2::device_calibration & self, rs2_calibration_type type )
+            {
+                py::gil_scoped_release gil;
+                self.trigger_device_calibration( type );
+            },
+            "Trigger the given calibration, if available", "calibration_type"_a )
+        .def( "register_calibration_change_callback",
+            []( rs2::device_calibration& self, std::function<void( rs2_calibration_status )> callback )
+            {
+                self.register_calibration_change_callback( 
+                    [callback]( rs2_calibration_status status )
+                    {
+                        try
+                        {
+                            // "When calling a C++ function from Python, the GIL is always held"
+                            // -- since we're not being called from Python but instead are calling it,
+                            // we need to acquire it to not have issues with other threads...
+                            py::gil_scoped_acquire gil;
+                            callback( status );
+                        }
+                        catch( ... )
+                        {
+                            std::cerr << "?!?!?!!? exception in python register_calibration_change_callback ?!?!?!?!?" << std::endl;
+                        }
+                    } );
+            },
+            "Register (only once!) a callback that gets called for each change in calibration", "callback"_a );
 
 
     py::class_<rs2::debug_protocol> debug_protocol(m, "debug_protocol"); // No docstring in C++

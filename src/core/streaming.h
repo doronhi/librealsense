@@ -31,18 +31,19 @@ namespace librealsense
 
     typedef enum profile_tag
     {
-        PROFILE_TAG_ANY = 0,
         PROFILE_TAG_SUPERSET = 1, // to be included in enable_all
         PROFILE_TAG_DEFAULT = 2,  // to be included in default pipeline start
+        PROFILE_TAG_ANY = 4,      // does not include PROFILE_TAG_DEBUG
+        PROFILE_TAG_DEBUG = 8,    // tag for debug formats
     } profile_tag;
 
     struct tagged_profile
     {
         rs2_stream stream;
         int stream_index;
-        uint32_t width, height;
+        int width, height;
         rs2_format format;
-        uint32_t fps;
+        int fps;
         int tag;
     };
 
@@ -191,12 +192,12 @@ namespace librealsense
         {
             return _blocks;
         }
-         
+
         void update(std::shared_ptr<extension_snapshot> ext) override {}
 
         processing_blocks _blocks;
     };
-   
+
 
     class recommended_proccesing_blocks_base : public virtual recommended_proccesing_blocks_interface, public virtual recordable<recommended_proccesing_blocks_interface>
     {
@@ -204,7 +205,7 @@ namespace librealsense
         recommended_proccesing_blocks_base(recommended_proccesing_blocks_interface* owner)
             :_owner(owner)
         {}
-        
+
         virtual processing_blocks get_recommended_processing_blocks() const override { return _owner->get_recommended_processing_blocks(); };
 
         virtual void create_snapshot(std::shared_ptr<recommended_proccesing_blocks_interface>& snapshot) const override

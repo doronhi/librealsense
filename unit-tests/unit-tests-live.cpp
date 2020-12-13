@@ -614,9 +614,9 @@ TEST_CASE("Extrinsic transformation between two streams is a rigid transform", "
                     REQUIRE_NOTHROW(b_to_a = profs_b[0].get_extrinsics_to(profs_a[0]));
 
                     require_transposed(a_to_b.rotation, b_to_a.rotation);
-                    REQUIRE(b_to_a.rotation[0] * a_to_b.translation[0] + b_to_a.rotation[3] * a_to_b.translation[1] + b_to_a.rotation[6] * a_to_b.translation[2] == Approx(-b_to_a.translation[0]));
-                    REQUIRE(b_to_a.rotation[1] * a_to_b.translation[0] + b_to_a.rotation[4] * a_to_b.translation[1] + b_to_a.rotation[7] * a_to_b.translation[2] == Approx(-b_to_a.translation[1]));
-                    REQUIRE(b_to_a.rotation[2] * a_to_b.translation[0] + b_to_a.rotation[5] * a_to_b.translation[1] + b_to_a.rotation[8] * a_to_b.translation[2] == Approx(-b_to_a.translation[2]));
+                    REQUIRE(b_to_a.rotation[0] * a_to_b.translation[0] + b_to_a.rotation[3] * a_to_b.translation[1] + b_to_a.rotation[6] * a_to_b.translation[2] == approx(-b_to_a.translation[0]));
+                    REQUIRE(b_to_a.rotation[1] * a_to_b.translation[0] + b_to_a.rotation[4] * a_to_b.translation[1] + b_to_a.rotation[7] * a_to_b.translation[2] == approx(-b_to_a.translation[1]));
+                    REQUIRE(b_to_a.rotation[2] * a_to_b.translation[0] + b_to_a.rotation[5] * a_to_b.translation[1] + b_to_a.rotation[8] * a_to_b.translation[2] == approx(-b_to_a.translation[2]));
                 }
             }
         }
@@ -671,71 +671,25 @@ TEST_CASE("Extrinsic transformations are transitive", "[live]")
 
                         // a_to_c.rotation == a_to_b.rotation * b_to_c.rotation
                         auto&& epsilon = 0.0001;
-                        REQUIRE(a_to_c.rotation[0] == Approx((float)(a_to_b.rotation[0] * b_to_c.rotation[0] + a_to_b.rotation[3] * b_to_c.rotation[1] + a_to_b.rotation[6] * b_to_c.rotation[2])).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[2] == Approx(a_to_b.rotation[2] * b_to_c.rotation[0] + a_to_b.rotation[5] * b_to_c.rotation[1] + a_to_b.rotation[8] * b_to_c.rotation[2]).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[1] == Approx(a_to_b.rotation[1] * b_to_c.rotation[0] + a_to_b.rotation[4] * b_to_c.rotation[1] + a_to_b.rotation[7] * b_to_c.rotation[2]).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[3] == Approx(a_to_b.rotation[0] * b_to_c.rotation[3] + a_to_b.rotation[3] * b_to_c.rotation[4] + a_to_b.rotation[6] * b_to_c.rotation[5]).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[4] == Approx(a_to_b.rotation[1] * b_to_c.rotation[3] + a_to_b.rotation[4] * b_to_c.rotation[4] + a_to_b.rotation[7] * b_to_c.rotation[5]).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[5] == Approx(a_to_b.rotation[2] * b_to_c.rotation[3] + a_to_b.rotation[5] * b_to_c.rotation[4] + a_to_b.rotation[8] * b_to_c.rotation[5]).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[6] == Approx(a_to_b.rotation[0] * b_to_c.rotation[6] + a_to_b.rotation[3] * b_to_c.rotation[7] + a_to_b.rotation[6] * b_to_c.rotation[8]).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[7] == Approx(a_to_b.rotation[1] * b_to_c.rotation[6] + a_to_b.rotation[4] * b_to_c.rotation[7] + a_to_b.rotation[7] * b_to_c.rotation[8]).epsilon(epsilon));
-                        REQUIRE(a_to_c.rotation[8] == Approx(a_to_b.rotation[2] * b_to_c.rotation[6] + a_to_b.rotation[5] * b_to_c.rotation[7] + a_to_b.rotation[8] * b_to_c.rotation[8]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[0] == approx((float)(a_to_b.rotation[0] * b_to_c.rotation[0] + a_to_b.rotation[3] * b_to_c.rotation[1] + a_to_b.rotation[6] * b_to_c.rotation[2])).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[2] == approx(a_to_b.rotation[2] * b_to_c.rotation[0] + a_to_b.rotation[5] * b_to_c.rotation[1] + a_to_b.rotation[8] * b_to_c.rotation[2]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[1] == approx(a_to_b.rotation[1] * b_to_c.rotation[0] + a_to_b.rotation[4] * b_to_c.rotation[1] + a_to_b.rotation[7] * b_to_c.rotation[2]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[3] == approx(a_to_b.rotation[0] * b_to_c.rotation[3] + a_to_b.rotation[3] * b_to_c.rotation[4] + a_to_b.rotation[6] * b_to_c.rotation[5]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[4] == approx(a_to_b.rotation[1] * b_to_c.rotation[3] + a_to_b.rotation[4] * b_to_c.rotation[4] + a_to_b.rotation[7] * b_to_c.rotation[5]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[5] == approx(a_to_b.rotation[2] * b_to_c.rotation[3] + a_to_b.rotation[5] * b_to_c.rotation[4] + a_to_b.rotation[8] * b_to_c.rotation[5]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[6] == approx(a_to_b.rotation[0] * b_to_c.rotation[6] + a_to_b.rotation[3] * b_to_c.rotation[7] + a_to_b.rotation[6] * b_to_c.rotation[8]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[7] == approx(a_to_b.rotation[1] * b_to_c.rotation[6] + a_to_b.rotation[4] * b_to_c.rotation[7] + a_to_b.rotation[7] * b_to_c.rotation[8]).epsilon(epsilon));
+                        REQUIRE(a_to_c.rotation[8] == approx(a_to_b.rotation[2] * b_to_c.rotation[6] + a_to_b.rotation[5] * b_to_c.rotation[7] + a_to_b.rotation[8] * b_to_c.rotation[8]).epsilon(epsilon));
 
                         // a_to_c.translation = a_to_b.transform(b_to_c.translation)
-                        REQUIRE(a_to_c.translation[0] == Approx(a_to_b.rotation[0] * b_to_c.translation[0] + a_to_b.rotation[3] * b_to_c.translation[1] + a_to_b.rotation[6] * b_to_c.translation[2] + a_to_b.translation[0]).epsilon(epsilon));
-                        REQUIRE(a_to_c.translation[1] == Approx(a_to_b.rotation[1] * b_to_c.translation[0] + a_to_b.rotation[4] * b_to_c.translation[1] + a_to_b.rotation[7] * b_to_c.translation[2] + a_to_b.translation[1]).epsilon(epsilon));
-                        REQUIRE(a_to_c.translation[2] == Approx(a_to_b.rotation[2] * b_to_c.translation[0] + a_to_b.rotation[5] * b_to_c.translation[1] + a_to_b.rotation[8] * b_to_c.translation[2] + a_to_b.translation[2]).epsilon(epsilon));
+                        REQUIRE(a_to_c.translation[0] == approx(a_to_b.rotation[0] * b_to_c.translation[0] + a_to_b.rotation[3] * b_to_c.translation[1] + a_to_b.rotation[6] * b_to_c.translation[2] + a_to_b.translation[0]).epsilon(epsilon));
+                        REQUIRE(a_to_c.translation[1] == approx(a_to_b.rotation[1] * b_to_c.translation[0] + a_to_b.rotation[4] * b_to_c.translation[1] + a_to_b.rotation[7] * b_to_c.translation[2] + a_to_b.translation[1]).epsilon(epsilon));
+                        REQUIRE(a_to_c.translation[2] == approx(a_to_b.rotation[2] * b_to_c.translation[0] + a_to_b.rotation[5] * b_to_c.translation[1] + a_to_b.rotation[8] * b_to_c.translation[2] + a_to_b.translation[2]).epsilon(epsilon));
                     }
                 }
             }
         }
     }
-}
-
-std::shared_ptr<device> do_with_waiting_for_camera_connection(rs2::context ctx, std::shared_ptr<device> dev, std::string serial, std::function<void()> operation)
-{
-    std::mutex m;
-    bool disconnected = false;
-    bool connected = false;
-    std::shared_ptr<device> result;
-    std::condition_variable cv;
-
-    ctx.set_devices_changed_callback([&result, dev, &disconnected, &connected, &m, &cv, &serial](rs2::event_information info) mutable
-    {
-        if (info.was_removed(*dev))
-        {
-            std::unique_lock<std::mutex> lock(m);
-            disconnected = true;
-            cv.notify_all();
-        }
-        auto list = info.get_new_devices();
-        if (list.size() > 0)
-        {
-            for (auto cam : list)
-            {
-                if (serial == cam.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER))
-                {
-                    std::unique_lock<std::mutex> lock(m);
-                    connected = true;
-                    result = std::make_shared<device>(cam);
-
-                    disable_sensitive_options_for(*result);
-                    cv.notify_all();
-                    break;
-                }
-            }
-        }
-    });
-
-    operation();
-
-    std::unique_lock<std::mutex> lock(m);
-    REQUIRE(wait_for_reset([&]() {
-        return cv.wait_for(lock, std::chrono::seconds(20), [&]() { return disconnected; });
-    }, dev));
-    REQUIRE(cv.wait_for(lock, std::chrono::seconds(20), [&]() { return connected; }));
-    REQUIRE(result);
-    return result;
 }
 
 TEST_CASE("Toggle Advanced Mode", "[live][AdvMd]") {
@@ -1347,6 +1301,68 @@ TEST_CASE("Check width and height of stream intrinsics", "[live][AdvMd]")
     }
 }
 
+std::vector<rs2::stream_profile> get_supported_streams(rs2::sensor sensor, std::vector<rs2::stream_profile> profiles) {
+    std::set<std::pair<rs2_stream, int>> supported_streams;
+    auto hint = supported_streams.begin();
+    // get the set of supported stream+index pairs
+    for (auto& profile : sensor.get_stream_profiles()) {
+        hint = supported_streams.emplace_hint(hint, profile.stream_type(), profile.stream_index());
+    }
+
+    // all profiles
+    std::map<std::pair<rs2_stream, int>, rs2::stream_profile> all_profiles;
+    for (auto& profile : profiles) {
+        all_profiles.emplace(std::make_pair(profile.stream_type(), profile.stream_index()), profile);
+    }
+
+    std::vector<rs2::stream_profile> output;
+    for (auto pair : supported_streams) {
+        auto it = all_profiles.find(pair);
+        if (it != all_profiles.end()) output.push_back(it->second);
+    }
+    return output;
+}
+
+TEST_CASE("get_active_streams sanity check", "[live]")
+{
+    rs2::context ctx;
+    if (make_context(SECTION_FROM_TEST_NAME, &ctx))
+    {
+        // Require at least one device to be plugged in
+        REQUIRE_NOTHROW(ctx.query_devices().size() > 0);
+        
+        // Get device and a stream profile for each stream type it supports
+        rs2::pipeline pipe(ctx);
+        rs2::config cfg;
+        rs2::pipeline_profile pipe_profile;
+        cfg.enable_all_streams();
+        REQUIRE_NOTHROW(pipe_profile = cfg.resolve(pipe));
+
+        rs2::device dev = pipe_profile.get_device();
+        std::vector<rs2::stream_profile> streams = pipe_profile.get_streams();
+
+        for (auto&& sensor : dev.query_sensors())
+        {
+            // find which streams are supported by this specific sensor
+            auto profiles = get_supported_streams(sensor, streams);
+            auto n_streams = profiles.size();
+            // iterate over all possible sets of streams supported by the sensor
+            for (size_t bits=(1 << n_streams)-1; bits>0; --bits) {
+                std::vector<rs2::stream_profile> opened_profiles;
+                for (int i = 0; i < n_streams; ++i) {
+                    if (bits&(1ULL << i)) opened_profiles.push_back(profiles[i]);
+                }
+                REQUIRE_NOTHROW(sensor.open(opened_profiles));
+                std::vector<rs2::stream_profile> reported_profiles;
+                REQUIRE_NOTHROW(reported_profiles = sensor.get_active_streams());
+                
+                REQUIRE(reported_profiles == opened_profiles);
+                sensor.close();
+            }
+        }
+    }
+}
+
 TEST_CASE("Check option API", "[live][options]")
 {
     // Require at least one device to be plugged in
@@ -1407,9 +1423,9 @@ TEST_CASE("Check option API", "[live][options]")
                         REQUIRE(value <= range.max);
 
                         // value doesn't change between two gets (if no additional threads are calling set)
-                        REQUIRE(dev.get_option(opt) == Approx(value));
+                        REQUIRE(dev.get_option(opt) == approx(value));
 
-                        // REQUIRE(value == Approx(range.def)); // Not sure if this is a reasonable check
+                        // REQUIRE(value == approx(range.def)); // Not sure if this is a reasonable check
                         // TODO: make sure value == range.min + k*range.step for some k?
                     }
                 }
@@ -1453,15 +1469,15 @@ TEST_CASE("Check option API", "[live][options]")
 
                     // setting a valid value lets you get that value back
                     dev.set_option(opt, range.min);
-                    REQUIRE(dev.get_option(opt) == Approx(range.min));
+                    REQUIRE(dev.get_option(opt) == approx(range.min));
 
                     // setting an invalid value returns the last set valid value.
                     REQUIRE_THROWS(dev.set_option(opt, range.max + range.step));
-                    REQUIRE(dev.get_option(opt) == Approx(range.min));
+                    REQUIRE(dev.get_option(opt) == approx(range.min));
 
                     dev.set_option(opt, range.max);
                     REQUIRE_THROWS(dev.set_option(opt, range.min - range.step));
-                    REQUIRE(dev.get_option(opt) == Approx(range.max));
+                    REQUIRE(dev.get_option(opt) == approx(range.max));
 
                 }
                 SECTION("get_description returns a non-empty, non-null string") {
@@ -2918,7 +2934,7 @@ static const std::map< dev_type, device_profiles> pipeline_default_configuration
 /* SR300*/              { { "0AA5", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 640, 480, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 1920, 1080, 0 } }, 30, true } },
 };
 
-TEST_CASE("Pipeline wait_for_frames", "[live][pipeline][using_pipeline]") {
+TEST_CASE("Pipeline wait_for_frames", "[live][pipeline][using_pipeline][!mayfail]") {
 
     rs2::context ctx;
 
@@ -2984,7 +3000,7 @@ TEST_CASE("Pipeline wait_for_frames", "[live][pipeline][using_pipeline]") {
     }
 }
 
-TEST_CASE("Pipeline poll_for_frames", "[live][pipeline][using_pipeline]")
+TEST_CASE("Pipeline poll_for_frames", "[live][pipeline][using_pipeline][!mayfail]")
 {
     rs2::context ctx;
 
@@ -3249,7 +3265,7 @@ TEST_CASE("Pipeline enable stream auto complete", "[live][pipeline][using_pipeli
     }
 }
 
-TEST_CASE("Pipeline disable_all", "[live][pipeline][using_pipeline]") {
+TEST_CASE("Pipeline disable_all", "[live][pipeline][using_pipeline][!mayfail]") {
 
     auto not_default_configurations = pipeline_custom_configurations;
     auto default_configurations = pipeline_default_configurations;
@@ -4380,7 +4396,7 @@ TEST_CASE("Empty Pipeline Profile", "[live][pipeline][using_pipeline]") {
 
     if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.13.0"))
     {
-        REQUIRE_NOTHROW(rs2::pipeline_profile p);
+        REQUIRE_NOTHROW(rs2::pipeline_profile());
         rs2::pipeline_profile prof;
         REQUIRE_FALSE(prof);
         rs2::device dev;
@@ -4458,7 +4474,7 @@ TEST_CASE("Pipeline empty Config", "[live][pipeline][using_pipeline]") {
 
     if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.13.0"))
     {
-        REQUIRE_NOTHROW(rs2::config c);
+        REQUIRE_NOTHROW(rs2::config());
         //Empty config
         rs2::pipeline p(ctx);
         rs2::config c1;
@@ -4479,8 +4495,6 @@ TEST_CASE("Pipeline 2 Configs", "[live][pipeline][using_pipeline]") {
     if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.13.0"))
     {
         rs2::pipeline p(ctx);
-        REQUIRE_NOTHROW(rs2::config c1);
-        REQUIRE_NOTHROW(rs2::config c2);
         rs2::config c1;
         rs2::config c2;
         bool can_resolve1 = false;
@@ -4670,7 +4684,7 @@ TEST_CASE("Pipeline stream enable hierarchy", "[pipeline]")
     }
 }
 
-TEST_CASE("Pipeline stream with callback", "[live][pipeline][using_pipeline]")
+TEST_CASE("Pipeline stream with callback", "[live][pipeline][using_pipeline][!mayfail]")
 {
     rs2::context ctx;
 
@@ -5574,7 +5588,7 @@ TEST_CASE("Positional_Sensors_API", "[live]")
         {
             CAPTURE(dev);
             REQUIRE(dev.is<rs2::tm2>());
-            REQUIRE_NOTHROW(auto tmp_pos = dev.first<rs2::pose_sensor>());
+            REQUIRE_NOTHROW(dev.first<rs2::pose_sensor>());
             auto pose_snr = dev.first<rs2::pose_sensor>();
             CAPTURE(pose_snr);
             REQUIRE(pose_snr);
@@ -5663,13 +5677,13 @@ TEST_CASE("Positional_Sensors_API", "[live]")
                     CAPTURE(vnv_pose);
                     CAPTURE(vnv_or);
                     CAPTURE(res);
-                    REQUIRE(test_pose.x == Approx(vnv_pose.x));
-                    REQUIRE(test_pose.y == Approx(vnv_pose.y));
-                    REQUIRE(test_pose.z == Approx(vnv_pose.z));
-                    REQUIRE(test_or.x == Approx(vnv_or.x));
-                    REQUIRE(test_or.y == Approx(vnv_or.y));
-                    REQUIRE(test_or.z == Approx(vnv_or.z));
-                    REQUIRE(test_or.w == Approx(vnv_or.w));
+                    REQUIRE(test_pose.x == approx(vnv_pose.x));
+                    REQUIRE(test_pose.y == approx(vnv_pose.y));
+                    REQUIRE(test_pose.z == approx(vnv_pose.z));
+                    REQUIRE(test_or.x == approx(vnv_or.x));
+                    REQUIRE(test_or.y == approx(vnv_or.y));
+                    REQUIRE(test_or.z == approx(vnv_or.z));
+                    REQUIRE(test_or.w == approx(vnv_or.w));
 
                     REQUIRE_NOTHROW(res = pose_snr.remove_static_node("wp1"));
                     REQUIRE_NOTHROW(!(res = pose_snr.remove_static_node("wp1")));
@@ -5770,7 +5784,7 @@ TEST_CASE("Wheel_Odometry_API", "[live]")
 }
 
 
-TEST_CASE("get_sensor_from_frame", "[live][using_pipeline]")
+TEST_CASE("get_sensor_from_frame", "[live][using_pipeline][!mayfail]")
 {
     // Require at least one device to be plugged in
     rs2::context ctx;
@@ -5806,5 +5820,100 @@ TEST_CASE("get_sensor_from_frame", "[live][using_pipeline]")
             }
         }
         REQUIRE_NOTHROW(pipe.stop());
+    }
+}
+
+TEST_CASE("l500_presets_set_preset", "[live]")
+{
+    std::vector<rs2_option> _hw_controls = { RS2_OPTION_VISUAL_PRESET, RS2_OPTION_PRE_PROCESSING_SHARPENING, RS2_OPTION_CONFIDENCE_THRESHOLD, RS2_OPTION_POST_PROCESSING_SHARPENING, RS2_OPTION_NOISE_FILTERING, RS2_OPTION_AVALANCHE_PHOTO_DIODE, RS2_OPTION_LASER_POWER ,RS2_OPTION_MIN_DISTANCE, RS2_OPTION_INVALIDATION_BYPASS };
+    // Require at least one device to be plugged in
+    rs2::context ctx;
+    if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.31.0"))
+    {
+        std::vector<sensor> list;
+        REQUIRE_NOTHROW(list = ctx.query_all_sensors());
+        REQUIRE(list.size() > 0);
+
+         sensor ds;
+
+         for (auto&& s : list)
+         {
+             if (s.is < rs2::depth_sensor>())
+             {
+                 ds = s.as < rs2::depth_sensor>();
+                 break;
+             }
+         }
+
+        REQUIRE(ds);
+
+        for (auto&& option : _hw_controls)
+        {
+            REQUIRE(ds.supports(option));
+        }
+        REQUIRE(ds.supports(RS2_OPTION_SENSOR_MODE));
+
+        auto presets = ds.get_option_range(RS2_OPTION_VISUAL_PRESET);
+        REQUIRE(presets.min == RS2_L500_VISUAL_PRESET_CUSTOM);
+        REQUIRE(presets.max == RS2_L500_VISUAL_PRESET_COUNT - 1);
+        REQUIRE(presets.step == 1);
+        REQUIRE(presets.def == RS2_L500_VISUAL_PRESET_DEFAULT);
+
+        std::map< rs2_option, option_range> options_range;
+
+        for (auto&& option : _hw_controls)
+        {
+            if (option != RS2_OPTION_VISUAL_PRESET)
+            {
+                options_range[option] = ds.get_option_range(option);
+            }
+        }
+
+        std::map<int, int> expected_ambient_per_preset =
+        {
+            {RS2_L500_VISUAL_PRESET_NO_AMBIENT, RS2_DIGITAL_GAIN_HIGH},
+            {RS2_L500_VISUAL_PRESET_LOW_AMBIENT, RS2_DIGITAL_GAIN_LOW},
+            {RS2_L500_VISUAL_PRESET_MAX_RANGE, RS2_DIGITAL_GAIN_HIGH},
+            {RS2_L500_VISUAL_PRESET_SHORT_RANGE, RS2_DIGITAL_GAIN_LOW}
+        };
+
+        std::map<int, int> expected_laser_power_per_preset =
+        {
+            {RS2_L500_VISUAL_PRESET_LOW_AMBIENT, 100},
+            {RS2_L500_VISUAL_PRESET_MAX_RANGE, 100}
+        };
+
+        std::map< float, float> apd_per_ambient;
+        for (auto i : expected_ambient_per_preset)
+        {
+            std::vector<int> resolutions{ RS2_SENSOR_MODE_XGA, RS2_SENSOR_MODE_VGA };
+            for (auto res : resolutions)
+            {
+                ds.set_option(RS2_OPTION_SENSOR_MODE, (float)res);
+                ds.set_option(RS2_OPTION_VISUAL_PRESET, (float)i.first);
+                CAPTURE(ds.get_option(RS2_OPTION_DIGITAL_GAIN));
+                REQUIRE(ds.get_option(RS2_OPTION_DIGITAL_GAIN) == i.second);
+                apd_per_ambient[ds.get_option(RS2_OPTION_DIGITAL_GAIN)] = ds.get_option(RS2_OPTION_AVALANCHE_PHOTO_DIODE);
+                auto expected_laser_power = expected_laser_power_per_preset.find(i.first);
+                if (expected_laser_power != expected_laser_power_per_preset.end())
+                {
+                    CAPTURE(ds.get_option(RS2_OPTION_LASER_POWER));
+                    REQUIRE(ds.get_option(RS2_OPTION_LASER_POWER) == expected_laser_power->second);
+                }
+
+            }
+        }
+
+        CAPTURE(apd_per_ambient[RS2_SENSOR_MODE_XGA]);
+        CAPTURE(apd_per_ambient[RS2_SENSOR_MODE_VGA]);
+        REQUIRE(apd_per_ambient[RS2_SENSOR_MODE_XGA] != apd_per_ambient[RS2_SENSOR_MODE_VGA]);
+        for (auto&& opt : options_range)
+        {
+            ds.set_option(opt.first, opt.second.min);
+            CAPTURE(ds.get_option(RS2_OPTION_VISUAL_PRESET));
+            REQUIRE(ds.get_option(RS2_OPTION_VISUAL_PRESET) == RS2_L500_VISUAL_PRESET_CUSTOM);
+            ds.set_option(RS2_OPTION_VISUAL_PRESET, RS2_L500_VISUAL_PRESET_LOW_AMBIENT);
+        }
+       
     }
 }

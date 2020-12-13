@@ -54,15 +54,12 @@ namespace librealsense
             LOG_ERROR("Frame is not valid. Failed to downcast to librealsense::frame.");
             return 0;
         }
-        auto pin_index = 0;
+        size_t pin_index = 0;
 
         if (frame->get_stream()->get_format() == RS2_FORMAT_Z16)
             pin_index = 1;
 
-        if(!_has_metadata[pin_index])
-        {
-           _has_metadata[pin_index] = has_metadata(frame);
-        }
+        _has_metadata[pin_index] = has_metadata(frame);
 
         auto md = (librealsense::metadata_intel_basic*)(f->additional_data.metadata_blob.data());
         if(_has_metadata[pin_index] && md)
@@ -90,7 +87,7 @@ namespace librealsense
             LOG_ERROR("Frame is not valid. Failed to downcast to librealsense::frame.");
             return 0;
         }
-        auto pin_index = 0;
+        size_t pin_index = 0;
 
         if (frame->get_stream()->get_format() == RS2_FORMAT_Z16)
             pin_index = 1;

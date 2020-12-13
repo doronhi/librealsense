@@ -43,9 +43,9 @@ namespace rs2
     inline bool operator==(const device_id& a, const device_id& b)
     {
         return equal(a.pid, b.pid) &&
-               equal(a.guid, b.guid) &&
-               equal(a.mi, b.mi) &&
-               equal(a.sn, b.sn);
+            equal(a.guid, b.guid) &&
+            equal(a.mi, b.mi) &&
+            equal(a.sn, b.sn);
     }
 
     class windows_metadata_helper : public metadata_helper
@@ -53,7 +53,7 @@ namespace rs2
     public:
         static bool parse_device_id(const std::string& id, device_id* res)
         {
-            static const std::regex regex("pid_([0-9a-f]+)&mi_([0-9]+)#[0-9]&([0-9a-f]+)&[\\s\\S]*\\{([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\}", std::regex_constants::icase);
+            static const std::regex regex("pid_([0-9a-f]+)&mi_([0-9]+)#[0-9a-f]&([0-9a-f]+)&[\\s\\S]*\\{([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\}", std::regex_constants::icase);
 
             std::match_results<std::string::const_iterator> match;
 
@@ -70,7 +70,7 @@ namespace rs2
 
         static void foreach_device_path(const std::vector<device_id>& devices,
             std::function<void(const device_id&,  /* matched device */
-                               std::wstring /* registry key of Device Parameters for that device */)> action)
+                std::wstring /* registry key of Device Parameters for that device */)> action)
         {
             std::map<std::string, std::vector<device_id>> guid_to_devices;
             for (auto&& d : devices)
@@ -118,7 +118,7 @@ namespace rs2
                         &cbSecurityDescriptor,   // security descriptor 
                         &ftLastWriteTime);       // last write time 
 
-                    for (int i = 0; i<cSubKeys; i++)
+                    for (auto i = 0ul; i < cSubKeys; i++)
                     {
                         TCHAR achKey[MAX_KEY_LENGTH];
                         DWORD cbName = MAX_KEY_LENGTH;
@@ -133,7 +133,8 @@ namespace rs2
                         {
                             std::wstring suffix = achKey;
                             device_id rdid;
-                            if (parse_device_id(std::string(suffix.begin(), suffix.end()), &rdid))
+                            auto a = std::string(suffix.begin(), suffix.end());
+                            if (parse_device_id(a, &rdid))
                             {
                                 for (auto&& did : kvp.second)
                                 {
@@ -158,7 +159,7 @@ namespace rs2
             if (mi == "00")
             {
                 // L500 has 3 media-pins
-                if (equal(pid, "0b0d") || equal(pid, "0b3d")) return 3;
+                if (equal(pid, "0b0d") || equal(pid, "0b3d") || equal(pid, "0b64")) return 3;
                 else return 2; // D400 has two
             }
             return 1; // RGB has one
@@ -176,7 +177,7 @@ namespace rs2
                 SECURITY_BUILTIN_DOMAIN_RID,
                 DOMAIN_ALIAS_RID_ADMINS,
                 0, 0, 0, 0, 0, 0,
-                &admin_group)) 
+                &admin_group))
             {
                 rs2::log(RS2_LOG_SEVERITY_WARN, "Unable to query permissions - AllocateAndInitializeSid failed");
                 return false;
@@ -223,6 +224,7 @@ namespace rs2
                         CloseHandle(sei.hProcess);
                         if (exitCode)
                             throw std::runtime_error("Failed to set metadata registry keys!");
+                        return true;
                     }
                 }
                 else
@@ -287,19 +289,26 @@ namespace rs2
 
                 rs2::context ctx;
                 auto list = ctx.query_devices();
-                for (int i = 0; i < list.size(); i++)
+                for (uint32_t i = 0; i < list.size(); i++)
                 {
                     try
                     {
                         rs2::device dev = list[i];
-                        if (dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE) && dev.supports(RS2_CAMERA_INFO_PHYSICAL_PORT))
+
+                        if (dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE))
                         {
                             std::string product = dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE);
                             if (can_support_metadata(product))
                             {
-                                std::string port = dev.get_info(RS2_CAMERA_INFO_PHYSICAL_PORT);
-                                device_id did;
-                                if (parse_device_id(port, &did)) dids.push_back(did);
+                                for (auto sen : dev.query_sensors())
+                                {
+                                    if (sen.supports(RS2_CAMERA_INFO_PHYSICAL_PORT))
+                                    {
+                                        std::string port = sen.get_info(RS2_CAMERA_INFO_PHYSICAL_PORT);
+                                        device_id did;
+                                        if (parse_device_id(port, &did)) dids.push_back(did);
+                                    }
+                                }
                             }
                         }
                     }
@@ -338,7 +347,7 @@ namespace rs2
     };
 #endif
 
-    metadata_helper& metadata_helper::instance() 
+    metadata_helper& metadata_helper::instance()
     {
 #ifdef WIN32
         static windows_metadata_helper instance;

@@ -106,7 +106,7 @@ namespace librealsense
         on_open _on_open;
         std::shared_ptr<metadata_parser_map> _metadata_parsers = nullptr;
 
-        sensor_base* _source_owner;
+        sensor_base* _source_owner = nullptr;
         frame_source _source;
         device* _owner;
         std::vector<platform::stream_profile> _uvc_profiles;
@@ -117,6 +117,7 @@ namespace librealsense
     private:
         lazy<stream_profiles> _profiles;
         stream_profiles _active_profiles;
+        mutable std::mutex _active_profile_mutex;
         signal<sensor_base, bool> on_before_streaming_changes;
     };
 
@@ -195,9 +196,11 @@ namespace librealsense
             const std::map<uint32_t, rs2_stream>& fourcc_to_rs2_stream_map = std::map<uint32_t, rs2_stream>());
         ~synthetic_sensor() override;
 
-        void register_option(rs2_option id, std::shared_ptr<option> option);
+        virtual void register_option(rs2_option id, std::shared_ptr<option> option);
+        virtual bool try_register_option(rs2_option id, std::shared_ptr<option> option);
         void unregister_option(rs2_option id);
         void register_pu(rs2_option id);
+        bool try_register_pu(rs2_option id);
 
         virtual stream_profiles init_stream_profiles() override;
 
@@ -330,7 +333,6 @@ namespace librealsense
         void stop() override;
         void register_xu(platform::extension_unit xu);
         void register_pu(rs2_option id);
-        void try_register_pu(rs2_option id);
 
         std::vector<platform::stream_profile> get_configuration() const { return _internal_config; }
         std::shared_ptr<platform::uvc_device> get_uvc_device() { return _device; }

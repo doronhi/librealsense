@@ -147,7 +147,7 @@ void rs2_connect_tm2_controller(const rs2_device* device, const unsigned char* m
 void rs2_disconnect_tm2_controller(const rs2_device* device, int id, rs2_error** error);
 
 
-/** 
+/**
 * Reset device to factory calibration
 * \param[in] device       The RealSense device
 * \param[out] error       If non-null, receives any error that occurs during this call, otherwise, errors are ignored
@@ -243,20 +243,33 @@ void rs2_enter_update_state(const rs2_device* device, rs2_error** error);
 
 /**
 * This will improve the depth noise.
-* \param[in] json_content       Json string to configure speed on chip calibration parameters:
+* \param[in] json_content       Json string to configure regular speed on chip calibration parameters:
                                     {
+                                      "calib type" : 0,
                                       "speed": 3,
                                       "scan parameter": 0,
-                                      "data sampling": 0
+                                      "adjust both sides": 0,
+                                      "white wall mode": 0
                                     }
-                                    speed - value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is  Slow
-                                    scan_parameter - value can be one of: Py scan (default) = 0, Rx scan = 1
-                                    data_sampling - value can be one of:polling data sampling = 0, interrupt data sampling = 1
+                                    calib_type - calibraton type: 0 = regular, 1 = focal length, 2 = both regular and focal length in order
+                                    speed - for regular calibration. value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is Slow for type 0 and Fast for type 2
+                                    scan_parameter - for regular calibration. value can be one of: Py scan (default) = 0, Rx scan = 1
+                                    adjust_both_sides - for focal length calibration. value can be one of: 0 = adjust right only, 1 = adjust both sides
+                                    white_wall_mode - white wall mode: 0 for normal mode and 1 for white wall mode
                                     if json is nullptr it will be ignored and calibration will use the default parameters
-* \param[out] health            Calibration Health-Check captures how far camera calibration is from the optimal one
-                                [0, 0.25) - Good
-                                [0.25, 0.75) - Can be Improved
-                                [0.75, ) - Requires Calibration
+* \param[out] health            The absolute value of regular calibration Health-Check captures how far camera calibration is from the optimal one
+                                    [0, 0.25) - Good
+                                    [0.25, 0.75) - Can be Improved
+                                    [0.75, ) - Requires Calibration
+                                The absolute value of focal length calibration Health-Check captures how far camera calibration is from the optimal one
+                                    [0, 0.15) - Good
+                                    [0.15, 0.75) - Can be Improved
+                                    [0.75, ) - Requires Calibration
+                                The two health numbers are encoded in one integer as follows for calib_type 2:
+                                    Regular health number times 1000 are bits 0 to 11
+                                    Regular health number is negative if bit 24 is 1
+                                    Focal length health number times 1000 are bits 12 to 23
+                                    Focal length health number is negative if bit 25 is 1
 * \param[in] callback           Optional callback to get progress notifications
 * \param[in] timeout_ms         Timeout in ms (use 5000 msec unless instructed otherwise)
 * \return                       New calibration table
@@ -265,22 +278,35 @@ const rs2_raw_data_buffer* rs2_run_on_chip_calibration_cpp(rs2_device* device, c
 
 /**
 * This will improve the depth noise.
-* \param[in] json_content       Json string to configure speed on chip calibration parameters:
+* \param[in] json_content       Json string to configure regular speed on chip calibration parameters:
                                     {
+                                      "calib type" : 0,
                                       "speed": 3,
                                       "scan parameter": 0,
-                                      "data sampling": 0
+                                      "adjust both sides": 0,
+                                      "white wall mode": 0
                                     }
-                                    speed - value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is  Slow
-                                    scan_parameter - value can be one of: Py scan (default) = 0, Rx scan = 1
-                                    data_sampling - value can be one of:polling data sampling = 0, interrupt data sampling = 1
+                                    calib_type - calibraton type: 0 = regular, 1 = focal length, 2 = both regular and focal length in order
+                                    speed - for regular calibration, value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is Slow for type 0 and Fast for type 2
+                                    scan_parameter - for regular calibration. value can be one of: Py scan (default) = 0, Rx scan = 1
+                                    adjust_both_sides - for focal length calibration. value can be one of: 0 = adjust right only, 1 = adjust both sides
+                                    white_wall_mode - white wall mode: 0 for normal mode and 1 for white wall mode
                                     if json is nullptr it will be ignored and calibration will use the default parameters
-* \param[out] health            Calibration Health-Check captures how far camera calibration is from the optimal one
-                                [0, 0.25) - Good
-                                [0.25, 0.75) - Can be Improved
-                                [0.75, ) - Requires Calibration
-* \param[in]  callback          Optional callback for update progress notifications, the progress value is normailzed to 1
-* \param[in]  client_data       Optional client data for the callback
+* \param[out] health            The absolute value of regular calibration Health-Check captures how far camera calibration is from the optimal one
+                                    [0, 0.25) - Good
+                                    [0.25, 0.75) - Can be Improved
+                                    [0.75, ) - Requires Calibration
+                                The absolute value of focal length calibration Health-Check captures how far camera calibration is from the optimal one
+                                    [0, 0.15) - Good
+                                    [0.15, 0.75) - Can be Improved
+                                    [0.75, ) - Requires Calibration
+                                The two health numbers are encoded in one integer as follows for calib_type 2:
+                                    Regular health number times 1000 are bits 0 to 11
+                                    Regular health number is negative if bit 24 is 1
+                                    Focal length health number times 1000 are bits 12 to 23
+                                    Focal length health number is negative if bit 25 is 1
+* \param[in] callback           Optional callback for update progress notifications, the progress value is normailzed to 1
+* \param[in] client_data        Optional client data for the callback
 * \param[in] timeout_ms         Timeout in ms (use 5000 msec unless instructed otherwise)
 * \return                       New calibration table
 */
@@ -288,7 +314,7 @@ const rs2_raw_data_buffer* rs2_run_on_chip_calibration(rs2_device* device, const
 
 /**
 * This will adjust camera absolute distance to flat target. User needs to enter the known ground truth.
-* \param[in] ground_truth_mm     Ground truth in mm must be between 2500 - 2000000
+* \param[in] ground_truth_mm     Ground truth in mm must be between 60 and 10000
 * \param[in] json_content        Json string to configure tare calibration parameters:
                                     {
                                       "average step count": 20,
@@ -310,9 +336,74 @@ const rs2_raw_data_buffer* rs2_run_on_chip_calibration(rs2_device* device, const
 */
 const rs2_raw_data_buffer* rs2_run_tare_calibration_cpp(rs2_device* dev, float ground_truth_mm, const void* json_content, int content_size, rs2_update_progress_callback* progress_callback, int timeout_ms, rs2_error** error);
 
+
+/**
+ * Used in device_calibration; enumerates the different calibration types
+ * available for that extension.
+ */
+typedef enum rs2_calibration_type
+{
+    RS2_CALIBRATION_AUTO_DEPTH_TO_RGB,
+    RS2_CALIBRATION_MANUAL_DEPTH_TO_RGB,
+    RS2_CALIBRATION_TYPE_COUNT
+} rs2_calibration_type;
+const char* rs2_calibration_type_to_string( rs2_calibration_type );
+
+/**
+ * Used in device_calibration with rs2_calibration_change_callback
+ */
+typedef enum rs2_calibration_status
+{
+    // Anything >= 0 is not an issue
+    RS2_CALIBRATION_TRIGGERED      =  0,  // AC triggered and is active; conditions are valid
+    RS2_CALIBRATION_SPECIAL_FRAME  =  1,  // Special frame received; expect a frame-drop!
+    RS2_CALIBRATION_STARTED        =  2,  // Have all frames in hand; starting processing
+    RS2_CALIBRATION_NOT_NEEDED     =  3,  // Finished; existing calibration within tolerances; nothing done!
+    RS2_CALIBRATION_SUCCESSFUL     =  4,  // Finished; have new calibration in-hand
+
+    RS2_CALIBRATION_RETRY          = -1,  // Initiating retry (asked for a new special frame)
+    RS2_CALIBRATION_FAILED         = -2,  // Unexpected: exception, device removed, stream stopped, etc.
+    RS2_CALIBRATION_SCENE_INVALID  = -3,  // Scene was not good enough for calibration; will retry
+    RS2_CALIBRATION_BAD_RESULT     = -4,  // Calibration finished, but results aren't good; will retry
+    RS2_CALIBRATION_BAD_CONDITIONS = -5,  // Trigger was attempted but conditions (temp/APD) were invalid (still inactive)
+
+    RS2_CALIBRATION_STATUS_FIRST   = -5,
+    RS2_CALIBRATION_STATUS_LAST    =  4,
+    RS2_CALIBRATION_STATUS_COUNT = RS2_CALIBRATION_STATUS_LAST - RS2_CALIBRATION_STATUS_FIRST + 1,
+} rs2_calibration_status;
+const char* rs2_calibration_status_to_string( rs2_calibration_status );
+
+typedef struct rs2_calibration_change_callback rs2_calibration_change_callback;
+typedef void (*rs2_calibration_change_callback_ptr)(rs2_calibration_status, void* arg);
+
+/**
+ * Adds a callback for a sensor that gets called when calibration (intrinsics) changes, e.g. due to auto-calibration
+ * \param[in] sensor        the sensor
+ * \param[in] callback      the C callback function that gets called
+ * \param[in] user          user argument that gets passed to the callback function
+ * \param[out] error        if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+ */
+void rs2_register_calibration_change_callback( rs2_device* dev, rs2_calibration_change_callback_ptr callback, void* user, rs2_error** error );
+
+/**
+ * Adds a callback for a sensor that gets called when calibration (intrinsics) changes, e.g. due to auto-calibration
+ * \param[in] sensor        the sensor
+ * \param[in] callback      the C++ callback interface that gets called
+ * \param[out] error        if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+ */
+void rs2_register_calibration_change_callback_cpp( rs2_device* dev, rs2_calibration_change_callback* callback, rs2_error** error );
+
+/**
+ * Triggers calibration of the given type
+ * \param[in] dev           the device
+ * \param[in] type          the type of calibration requested
+ * \param[out] error        if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+ */
+void rs2_trigger_device_calibration( rs2_device* dev, rs2_calibration_type type, rs2_error** error );
+
 /**
 * This will adjust camera absolute distance to flat target. User needs to enter the known ground truth.
-* \param[in] ground_truth_mm     Ground truth in mm must be between 2500 - 2000000
+* \param[in] ground_truth_mm     Ground truth in mm must be between 60 and 10000
 * \param[in] json_content        Json string to configure tare calibration parameters:
                                     {
                                       "average_step_count": 20,
@@ -346,6 +437,12 @@ const rs2_raw_data_buffer* rs2_get_calibration_table(const rs2_device* dev, rs2_
 * \param[in]     Calibration table
 */
 void rs2_set_calibration_table(const rs2_device* device, const void* calibration, int calibration_size, rs2_error** error);
+
+/* Serialize JSON content, returns ASCII-serialized JSON string on success. otherwise nullptr */
+rs2_raw_data_buffer* rs2_serialize_json(rs2_device* dev, rs2_error** error);
+
+/* Load JSON and apply advanced-mode controls */
+void rs2_load_json(rs2_device* dev, const void* json_content, unsigned content_size, rs2_error** error);
 
 #ifdef __cplusplus
 }

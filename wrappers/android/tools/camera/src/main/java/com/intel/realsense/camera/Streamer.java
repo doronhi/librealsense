@@ -53,7 +53,7 @@ public class Streamer {
         @Override
         public void run() {
             try {
-                try(FrameSet frames = mPipeline.waitForFrames(1000)) {
+                try(FrameSet frames = mPipeline.waitForFrames()) {
                     mListener.onFrameset(frames);
                 }
                 mHandler.post(mStreaming);
@@ -126,6 +126,7 @@ public class Streamer {
                 configStream(config);
             if(mListener != null)
                 mListener.config(config);
+            // try statement needed here to release resources allocated by the Pipeline:start() method
             try (PipelineProfile pp = mPipeline.start(config)){}
         }
     }

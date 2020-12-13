@@ -98,11 +98,10 @@ namespace librealsense
         std::vector<byte> data;
         frame_additional_data additional_data;
         std::shared_ptr<metadata_parser_map> metadata_parsers = nullptr;
-        explicit frame() : ref_count(0), _kept(false), owner(nullptr), on_release() {}
+        explicit frame() : ref_count(0), owner(nullptr), on_release(),_kept(false) {}
         frame(const frame& r) = delete;
         frame(frame&& r)
-            : ref_count(r.ref_count.exchange(0)), _kept(r._kept.exchange(false)),
-            owner(r.owner), on_release()
+            : ref_count(r.ref_count.exchange(0)), owner(r.owner), on_release(), _kept(r._kept.exchange(false))
         {
             *this = std::move(r);
             if (owner) metadata_parsers = owner->get_md_parsers();
@@ -217,7 +216,7 @@ namespace librealsense
         void keep() override
         {
             auto frames = get_frames();
-            for (int i = 0; i < get_embedded_frames_count(); i++)
+            for (size_t i = 0; i < get_embedded_frames_count(); i++)
                 if (frames[i]) frames[i]->keep();
             frame::keep();
         }
@@ -489,5 +488,4 @@ namespace librealsense
     };
 
     MAP_EXTENSION(RS2_EXTENSION_POSE_FRAME, librealsense::pose_frame);
- 
 }

@@ -3,9 +3,12 @@
 
 #pragma once
 
+#include <unordered_set>
 #include "model-views.h"
 #include "notifications.h"
-#include "viewer.h"
+#include "skybox.h"
+#include "measurement.h"
+#include "updates-model.h"
 #include <librealsense2/hpp/rs_export.hpp>
 
 namespace rs2
@@ -59,13 +62,10 @@ namespace rs2
 
         const float panel_width = 340.f;
         const float panel_y = 50.f;
-        const float default_log_h = 110.f;
 
-        float get_output_height() const { return (is_output_collapsed ? default_log_h : 15); }
+        float get_output_height() const { return not_model->output.get_output_height(); }
 
         rs2::frame handle_ready_frames(const rect& viewer_rect, ux_window& window, int devices, std::string& error_message);
-
-        viewer_model();
 
         ~viewer_model()
         {
@@ -102,23 +102,24 @@ namespace rs2
 
         void popup_firmware_update_progress(const ux_window& window, const float progress);
 
-        void show_event_log(ImFont* font_14, float x, float y, float w, float h);
-
         void render_pose(rs2::rect stream_rect, float buttons_heights);
+        void try_select_pointcloud(ux_window& win);
 
-        void show_3dviewer_header(ImFont* large_font, ImFont* font, rs2::rect stream_rect, bool& paused, std::string& error_message);
+        void show_3dviewer_header(ux_window& window, rs2::rect stream_rect, bool& paused, std::string& error_message);
 
         void update_3d_camera(ux_window& win, const rect& viewer_rect, bool force = false);
 
         void show_top_bar(ux_window& window, const rect& viewer_rect, const device_models_list& devices);
 
-        void render_3d_view(const rect& view_rect, 
-            std::shared_ptr<texture_buffer> texture, rs2::points points, ImFont *font1);
+        void render_3d_view(const rect& view_rect, ux_window& win, 
+            std::shared_ptr<texture_buffer> texture, rs2::points points);
 
         void render_2d_view(const rect& view_rect, ux_window& win, int output_height,
             ImFont *font1, ImFont *font2, size_t dev_model_num, const mouse_info &mouse, std::string& error_message);
 
         void gc_streams();
+
+        bool is_option_skipped(rs2_option opt) const;
 
         std::mutex streams_mutex;
         std::map<int, stream_model> streams;
@@ -128,12 +129,12 @@ namespace rs2
         std::shared_ptr<syncer_model> syncer;
         post_processing_filters ppf;
 
-        context ctx;
-        notifications_model not_model;
-        bool is_output_collapsed = false;
+        context &ctx;
+        std::shared_ptr<notifications_model> not_model = std::make_shared<notifications_model>();
         bool is_3d_view = false;
         bool paused = false;
         bool metric_system = true;
+        uint32_t ground_truth_r = 1200;
 
         enum export_type
         {
@@ -159,21 +160,42 @@ namespace rs2
 
         int selected_depth_source_uid = -1;
         int selected_tex_source_uid = -1;
+        std::vector<int> last_tex_sources;
+        double texture_update_time = 0.0;
+
+        enum class shader_type
+        {
+            points,
+            flat,
+            diffuse
+        };
+        shader_type selected_shader = shader_type::diffuse;
 
         float dim_level = 1.f;
 
-        bool continue_with_ui_not_aligned = false;
         bool continue_with_current_fw = false;
+
+        bool select_3d_source = false;
+        bool select_tex_source = false;
+        bool select_shader_source = false;
+        bool show_help_screen = false;
+        bool occlusion_invalidation = true;
+        bool glsl_available = false;
+        bool modal_notification_on = false; // a notification which was expanded
 
         press_button_model trajectory_button{ u8"\uf1b0", u8"\uf1b0","Draw trajectory", "Stop drawing trajectory", true };
         press_button_model grid_object_button{ u8"\uf1cb", u8"\uf1cb",  "Configure Grid", "Configure Grid", false };
         press_button_model pose_info_object_button{ u8"\uf05a", u8"\uf05a",  "Show pose stream info overlay", "Hide pose stream info overlay", false };
 
-        bool show_pose_info_3d = false;
+        viewer_model(context &ctx_);
 
+        std::shared_ptr<updates_model> updates;
+
+        std::unordered_set<int> _hidden_options;
     private:
-        void check_permissions();
 
+        void check_permissions();
+        void hide_common_options();
         std::vector<popup> _active_popups;
 
         struct rgb {
@@ -208,11 +230,9 @@ namespace rs2
         float3 target = { 0.0f, 0.0f, 0.0f };
         float3 up;
         bool fixed_up = true;
-        bool render_quads = true;
 
         float view[16];
-        bool texture_wrapping_on = true;
-        GLint texture_border_mode = GL_CLAMP_TO_EDGE; // GL_CLAMP_TO_BORDER
+        GLint texture_border_mode = GL_CLAMP_TO_EDGE;
 
         rs2::points last_points;
         std::shared_ptr<texture_buffer> last_texture;
@@ -223,5 +243,17 @@ namespace rs2
 
         rs2::gl::camera_renderer _cam_renderer;
         rs2::gl::pointcloud_renderer _pc_renderer;
+
+
+        bool _pc_selected = false;
+        
+
+        temporal_event origin_occluded { std::chrono::milliseconds(3000) };
+
+        bool show_skybox = true;
+        skybox _skybox;
+
+        measurement _measurements;
+        
     };
 }

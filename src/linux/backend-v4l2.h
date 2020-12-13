@@ -36,13 +36,8 @@
 #include <linux/usb/video.h>
 #include <linux/uvcvideo.h>
 #include <linux/videodev2.h>
-#include <fts.h>
 #include <regex>
 #include <list>
-
-#pragma GCC diagnostic ignored "-Wpedantic"
-#include <libusb.h>
-#pragma GCC diagnostic pop
 
 // Metadata streaming nodes are available with kernels 4.16+
 #ifdef V4L2_META_FMT_UVC
@@ -107,9 +102,12 @@ namespace librealsense
             std::string _device_path;
             uint32_t _timeout;
             int _fildes;
+            static std::recursive_mutex _init_mutex;
+            static std::map<std::string, std::recursive_mutex> _dev_mutex;
+            static std::map<std::string, int> _dev_mutex_cnt;
+            int _object_lock_counter;
             std::mutex _mutex;
         };
-
         static int xioctl(int fh, unsigned long request, void *arg);
 
         class buffer
@@ -177,6 +175,7 @@ namespace librealsense
             void    set_md_attributes(uint8_t md_size, void* md_start)
                     { _md_start = md_start; _md_size = md_size; }
             void    set_md_from_video_node(bool compressed);
+            bool    verify_vd_md_sync() const;
 
         private:
             void*                               _md_start;  // marks the address of metadata blob
@@ -190,13 +189,23 @@ namespace librealsense
                 {
                     if (_data_buf && (!_managed))
                     {
-                        //LOG_DEBUG("Enqueue buf " << _dq_buf.index << " for fd " << _file_desc);
                         if ((_file_desc > 0) && (xioctl(_file_desc, (int)VIDIOC_QBUF, &_dq_buf) < 0))
                         {
-                            LOG_INFO("xioctl(VIDIOC_QBUF) guard failed");
+                            LOG_ERROR("xioctl(VIDIOC_QBUF) guard failed for fd " << std::dec << _file_desc);
+                            if (xioctl(_file_desc, (int)VIDIOC_DQBUF, &_dq_buf) >= 0)
+                            {
+                                LOG_WARNING("xioctl(VIDIOC_QBUF) Re-enqueue succeeded for fd " << std::dec << _file_desc);
+                                if (xioctl(_file_desc, (int)VIDIOC_QBUF, &_dq_buf) < 0)
+                                    LOG_WARNING("xioctl(VIDIOC_QBUF) re-deque  failed for fd " << std::dec << _file_desc);
+                                else
+                                    LOG_WARNING("xioctl(VIDIOC_QBUF) re-deque succeeded for fd " << std::dec << _file_desc);
+                            }
+                            else
+                                LOG_WARNING("xioctl(VIDIOC_QBUF) Re-enqueue failed for fd " << std::dec << _file_desc);
                         }
                     }
                 }
+
                 std::shared_ptr<platform::buffer>   _data_buf=nullptr;
                 v4l2_buffer                         _dq_buf{};
                 int                                 _file_desc=-1;

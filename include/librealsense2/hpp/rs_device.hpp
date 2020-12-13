@@ -226,7 +226,7 @@ namespace rs2
 
             results.insert(results.begin(), start, start + size);
 
-return results;
+            return results;
         }
 
         // Update an updatable device to the provided unsigned firmware. This call is executed on the caller's thread.
@@ -242,7 +242,7 @@ return results;
         void update_unsigned(const std::vector<uint8_t>& image, T callback, int update_mode = RS2_UNSIGNED_UPDATE_MODE_UPDATE) const
         {
             rs2_error* e = nullptr;
-            rs2_update_firmware_unsigned_cpp(_dev.get(), image.data(), image.size(), new update_progress_callback<T>(std::move(callback)), update_mode, &e);
+            rs2_update_firmware_unsigned_cpp(_dev.get(), image.data(), int(image.size()), new update_progress_callback<T>(std::move(callback)), update_mode, &e);
             error::handle(e);
         }
     };
@@ -277,7 +277,7 @@ return results;
         void update(const std::vector<uint8_t>& fw_image, T callback) const
         {
             rs2_error* e = nullptr;
-            rs2_update_firmware_cpp(_dev.get(), fw_image.data(), fw_image.size(), new update_progress_callback<T>(std::move(callback)), &e);
+            rs2_update_firmware_cpp(_dev.get(), fw_image.data(), int(fw_image.size()), new update_progress_callback<T>(std::move(callback)), &e);
             error::handle(e);
         }
     };
@@ -327,24 +327,37 @@ return results;
         }
 
         /**
-        * This will improve the depth noise.
-        * \param[in] json_content       Json string to configure speed on chip calibration parameters:
+         * This will improve the depth noise.
+         * \param[in] json_content      Json string to configure regular speed on chip calibration parameters:
                                             {
+                                              "calib type" : 0,
                                               "speed": 3,
                                               "scan parameter": 0,
-                                              "data sampling": 0
+                                              "adjust both sides": 0,
+                                              "white wall mode": 0
                                             }
-                                            speed - value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is  Slow
-                                            scan_parameter - value can be one of: Py scan (default) = 0, Rx scan = 1
-                                            data_sampling - value can be one of:polling data sampling = 0, interrupt data sampling = 1
+                                            calib_type - calibraton type: 0 = regular, 1 = focal length, 2 = both regular and focal length in order
+                                            speed - for regular calibration. value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is Slow for type 0 and Fast for type 2
+                                            scan_parameter - for regular calibration. value can be one of: Py scan (default) = 0, Rx scan = 1
+                                            adjust_both_sides - for focal length calibration. value can be one of: 0 = adjust right only, 1 = adjust both sides
+                                            white_wall_mode - white wall mode: 0 for normal mode and 1 for white wall mode
                                             if json is nullptr it will be ignored and calibration will use the default parameters
-        * \param[out] health            Calibration Health-Check captures how far camera calibration is from the optimal one
-                                        [0, 0.25) - Good
-                                        [0.25, 0.75) - Can be Improved
-                                        [0.75, ) - Requires Calibration
-        * \param[in] callback           Optional callback to get progress notifications
-        * \param[in] timeout_ms         Timeout in ms
-        * \return                       New calibration table
+         * \param[out] health           The absolute value of regular calibration Health-Check captures how far camera calibration is from the optimal one
+                                            [0, 0.25) - Good
+                                            [0.25, 0.75) - Can be Improved
+                                            [0.75, ) - Requires Calibration
+                                        The absolute value of focal length calibration Health-Check captures how far camera calibration is from the optimal one
+                                            [0, 0.15) - Good
+                                            [0.15, 0.75) - Can be Improved
+                                            [0.75, ) - Requires Calibration
+                                        The two health numbers are encoded in one integer as follows for calib_type 2:
+                                            Regular health number times 1000 are bits 0 to 11
+                                            Regular health number is negative if bit 24 is 1
+                                            Focal length health number times 1000 are bits 12 to 23
+                                            Focal length health number is negative if bit 25 is 1
+         * \param[in] callback          Optional callback to get progress notifications
+         * \param[in] timeout_ms        Timeout in ms
+         * \return                      New calibration table
         */
         template<class T>
         calibration_table run_on_chip_calibration(std::string json_content, float* health, T callback, int timeout_ms = 5000) const
@@ -353,7 +366,7 @@ return results;
 
             rs2_error* e = nullptr;
             std::shared_ptr<const rs2_raw_data_buffer> list(
-                rs2_run_on_chip_calibration_cpp(_dev.get(), json_content.data(), json_content.size(), health, new update_progress_callback<T>(std::move(callback)), timeout_ms, &e),
+                rs2_run_on_chip_calibration_cpp(_dev.get(), json_content.data(), int(json_content.size()), health, new update_progress_callback<T>(std::move(callback)), timeout_ms, &e),
                 rs2_delete_raw_data);
             error::handle(e);
 
@@ -369,22 +382,35 @@ return results;
 
         /**
          * This will improve the depth noise.
-         * \param[in] json_content       Json string to configure speed on chip calibration parameters:
+         * \param[in] json_content      Json string to configure regular speed on chip calibration parameters:
                                             {
+                                              "focal length" : 0,
                                               "speed": 3,
                                               "scan parameter": 0,
-                                              "data sampling": 0
+                                              "adjust both sides": 0,
+                                              "white wall mode": 0
                                             }
-                                            speed - value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is  Slow
-                                            scan parameter - value can be one of: Py scan (default) = 0, Rx scan = 1
-                                            data sampling - value can be one of:polling data sampling = 0, interrupt data sampling = 1
+                                            focal_length - calibraton type: 0 = regular, 1 = focal length, 2 = both regular and focal length in order
+                                            speed - for regular calibration. value can be one of: Very fast = 0, Fast = 1, Medium = 2, Slow = 3, White wall = 4, default is Slow for type 0 and Fast for type 2
+                                            scan_parameter - for regular calibration. value can be one of: Py scan (default) = 0, Rx scan = 1
+                                            adjust_both_sides - for focal length calibration. value can be one of: 0 = adjust right only, 1 = adjust both sides
+                                            white_wall_mode - white wall mode: 0 for normal mode and 1 for white wall mode
                                             if json is nullptr it will be ignored and calibration will use the default parameters
-         * \param[out] health            Calibration Health-Check captures how far camera calibration is from the optimal one
-                                         [0, 0.25) - Good
-                                         [0.25, 0.75) - Can be Improved
-                                         [0.75, ) - Requires Calibration
-         * \param[in] timeout_ms         Timeout in ms
-         * \return                       New calibration table
+         * \param[out] health           The absolute value of regular calibration Health-Check captures how far camera calibration is from the optimal one
+                                            [0, 0.25) - Good
+                                            [0.25, 0.75) - Can be Improved
+                                            [0.75, ) - Requires Calibration
+                                        The absolute value of focal length calibration Health-Check captures how far camera calibration is from the optimal one
+                                            [0, 0.15) - Good
+                                            [0.15, 0.75) - Can be Improved
+                                            [0.75, ) - Requires Calibration
+                                        The two health numbers are encoded in one integer as follows for calib_type 2:
+                                            Regular health number times 1000 are bits 0 to 11
+                                            Regular health number is negative if bit 24 is 1
+                                            Focal length health number times 1000 are bits 12 to 23
+                                            Focal length health number is negative if bit 25 is 1
+         * \param[in] timeout_ms        Timeout in ms
+         * \return                      New calibration table
          */
         calibration_table run_on_chip_calibration(std::string json_content, float* health, int timeout_ms = 5000) const
         {
@@ -392,7 +418,7 @@ return results;
 
             rs2_error* e = nullptr;
             std::shared_ptr<const rs2_raw_data_buffer> list(
-                rs2_run_on_chip_calibration_cpp(_dev.get(), json_content.data(), json_content.size(), health, nullptr, timeout_ms, &e),
+                rs2_run_on_chip_calibration_cpp(_dev.get(), json_content.data(), static_cast< int >( json_content.size() ), health, nullptr, timeout_ms, &e),
                 rs2_delete_raw_data);
             error::handle(e);
             auto size = rs2_get_raw_data_size(list.get(), &e);
@@ -407,7 +433,7 @@ return results;
 
         /**
         * This will adjust camera absolute distance to flat target. User needs to enter the known ground truth.
-        * \param[in] ground_truth_mm     Ground truth in mm must be between 2500 - 2000000
+        * \param[in] ground_truth_mm     Ground truth in mm must be between 60 and 10000
         * \param[in] json_content        Json string to configure tare calibration parameters:
                                             {
                                               "average step count": 20,
@@ -434,7 +460,7 @@ return results;
 
             rs2_error* e = nullptr;
             std::shared_ptr<const rs2_raw_data_buffer> list(
-                rs2_run_tare_calibration_cpp(_dev.get(), ground_truth_mm, json_content.data(), json_content.size(), new update_progress_callback<T>(std::move(callback)), timeout_ms, &e),
+                rs2_run_tare_calibration_cpp(_dev.get(), ground_truth_mm, json_content.data(), int(json_content.size()), new update_progress_callback<T>(std::move(callback)), timeout_ms, &e),
                 rs2_delete_raw_data);
             error::handle(e);
 
@@ -450,7 +476,7 @@ return results;
 
         /**
          * This will adjust camera absolute distance to flat target. User needs to enter the known ground truth.
-         * \param[in] ground_truth_mm     Ground truth in mm must be between 2500 - 2000000
+         * \param[in] ground_truth_mm     Ground truth in mm must be between 60 and 10000
          * \param[in] json_content        Json string to configure tare calibration parameters:
                                              {
                                                "average step count": 20,
@@ -475,7 +501,7 @@ return results;
 
             rs2_error* e = nullptr;
             std::shared_ptr<const rs2_raw_data_buffer> list(
-                rs2_run_tare_calibration_cpp(_dev.get(), ground_truth_mm, json_content.data(), json_content.size(), nullptr, timeout_ms, &e),
+                rs2_run_tare_calibration_cpp(_dev.get(), ground_truth_mm, json_content.data(), static_cast< int >( json_content.size() ), nullptr, timeout_ms, &e),
                 rs2_delete_raw_data);
             error::handle(e);
 
@@ -520,11 +546,74 @@ return results;
         void set_calibration_table(const calibration_table& calibration)
         {
             rs2_error* e = nullptr;
-            rs2_set_calibration_table(_dev.get(), calibration.data(), calibration.size(), &e);
+            rs2_set_calibration_table(_dev.get(), calibration.data(), static_cast< int >( calibration.size() ), &e);
             error::handle(e);
         }
+    };
 
- 
+    /*
+        Wrapper around any callback function that is given to calibration_change_callback.
+    */
+    template< class callback >
+    class calibration_change_callback : public rs2_calibration_change_callback
+    {
+        //using callback = std::function< void( rs2_calibration_status ) >;
+        callback _callback;
+    public:
+        calibration_change_callback( callback cb ) : _callback( cb ) {}
+
+        void on_calibration_change( rs2_calibration_status status ) noexcept override
+        {
+            _callback( status );
+        }
+        void release() override { delete this; }
+    };
+
+    class device_calibration : public device
+    {
+    public:
+        device_calibration( device d )
+            : device( d.get() )
+        {
+            rs2_error* e = nullptr;
+            if( rs2_is_device_extendable_to( _dev.get(), RS2_EXTENSION_DEVICE_CALIBRATION, &e ) == 0 && !e )
+            {
+                _dev.reset();
+            }
+            error::handle( e );
+        }
+
+        /*
+        Your callback should look like this, for example:
+            sensor.register_calibration_change_callback(
+                []( rs2_calibration_status ) noexcept
+                {
+                    ...
+                })
+        */
+        template< typename T >
+        void register_calibration_change_callback( T callback )
+        {
+            // We wrap the callback with an interface and pass it to librealsense, who will
+            // now manage its lifetime. Rather than deleting it, though, it will call its
+            // release() function, where (back in our context) it can be safely deleted:
+            rs2_error* e = nullptr;
+            rs2_register_calibration_change_callback_cpp(
+                _dev.get(),
+                new calibration_change_callback< T >( std::move( callback )),
+                &e );
+            error::handle( e );
+        }
+
+        /**
+        * This will trigger the given calibration, if available
+        */
+        void trigger_device_calibration( rs2_calibration_type type )
+        {
+            rs2_error* e = nullptr;
+            rs2_trigger_device_calibration( _dev.get(), type, &e );
+            error::handle( e );
+        }
     };
 
     class debug_protocol : public device

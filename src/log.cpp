@@ -5,7 +5,7 @@
 
 #include <fstream>
 
-#if BUILD_EASYLOGGINGPP
+#ifdef BUILD_EASYLOGGINGPP
 INITIALIZE_EASYLOGGINGPP
 
 namespace librealsense
@@ -24,6 +24,11 @@ void librealsense::log_to_file(rs2_log_severity min_severity, const char * file_
     logger.log_to_file(min_severity, file_path);
 }
 
+void librealsense::log_to_callback( rs2_log_severity min_severity, log_callback_ptr callback )
+{
+    logger.log_to_callback( min_severity, callback );
+}
+
 #else // BUILD_EASYLOGGINGPP
 
 void librealsense::log_to_console(rs2_log_severity min_severity)
@@ -34,5 +39,9 @@ void librealsense::log_to_file(rs2_log_severity min_severity, const char * file_
 {
 }
 
+void librealsense::log_to_callback(rs2_log_severity min_severity, log_callback_ptr callback)
+{
+    throw std::runtime_error("log_to_callback is not supported without BUILD_EASYLOGGINGPP");
+}
 #endif // BUILD_EASYLOGGINGPP
 

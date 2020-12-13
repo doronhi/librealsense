@@ -33,6 +33,22 @@ static void rs2_project_point_to_pixel(float pixel[2], const struct rs2_intrinsi
         x = dx;
         y = dy;
     }
+
+    if (intrin->model == RS2_DISTORTION_BROWN_CONRADY)
+    {
+        float r2 = x * x + y * y;
+        float f = 1 + intrin->coeffs[0] * r2 + intrin->coeffs[1] * r2*r2 + intrin->coeffs[4] * r2*r2*r2;
+
+        float xf = x * f;
+        float yf = y * f;
+
+        float dx = xf + 2 * intrin->coeffs[2] * x*y + intrin->coeffs[3] * (r2 + 2 * x*x);
+        float dy = yf + 2 * intrin->coeffs[3] * x*y + intrin->coeffs[2] * (r2 + 2 * y*y);
+
+        x = dx;
+        y = dy;
+    }
+
     if (intrin->model == RS2_DISTORTION_FTHETA)
     {
         float r = sqrtf(x*x + y*y);
@@ -93,7 +109,7 @@ static void rs2_deproject_pixel_to_point(float point[3], const struct rs2_intrin
         for (int i = 0; i < 4; i++)
         {
             float f = theta*(1 + theta2*(intrin->coeffs[0] + theta2*(intrin->coeffs[1] + theta2*(intrin->coeffs[2] + theta2*intrin->coeffs[3])))) - rd;
-            if (abs(f) < FLT_EPSILON)
+            if (fabs(f) < FLT_EPSILON)
             {
                 break;
             }
@@ -212,5 +228,4 @@ static void rs2_project_color_pixel_to_depth_pixel(float to_pixel[2],
         }
     }
 }
-
 #endif

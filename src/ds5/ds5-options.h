@@ -7,6 +7,7 @@
 
 #include "algo.h"
 #include "error-handling.h"
+#include "../hdr-config.h"
 
 namespace librealsense
 {
@@ -52,26 +53,6 @@ namespace librealsense
         const std::string custom_sensor_name = "custom";
         const std::string report_name = "data-field-custom-value_2";
         hid_sensor& _ep;
-    };
-
-    class enable_motion_correction : public option_base
-    {
-    public:
-        void set(float value) override;
-
-        float query() const override;
-
-        bool is_enabled() const override { return true; }
-
-        const char* get_description() const override
-        {
-            return "Enable/Disable Automatic Motion Data Correction";
-        }
-
-        enable_motion_correction(sensor_base* mm_ep, const option_range& opt_range);
-
-    private:
-        std::atomic<bool>   _is_active;
     };
 
     class enable_auto_exposure_option : public option_base
@@ -229,6 +210,31 @@ namespace librealsense
         hw_monitor& _hwm;
     };
 
+    class external_sync_mode2 : public option
+    {
+    public:
+        external_sync_mode2(hw_monitor& hwm, sensor_base* depth_ep);
+        virtual ~external_sync_mode2() = default;
+        virtual void set(float value) override;
+        virtual float query() const override;
+        virtual option_range get_range() const override;
+        virtual bool is_enabled() const override { return _sensor && !_sensor ->is_streaming(); }
+
+        const char* get_description() const override
+        {
+            return "Inter-camera synchronization mode: 0:Default, 1:Master, 2:Slave, 3:Full Salve, 4-258:Genlock with burst count of 1-255 frames for each trigger";
+        }
+        void enable_recording(std::function<void(const option &)> record_action) override
+        {
+            _record_action = record_action;
+        }
+    private:
+        std::function<void(const option &)> _record_action = [](const option&) {};
+        lazy<option_range> _range;
+        hw_monitor& _hwm;
+        sensor_base* _sensor;
+    };
+
     class emitter_on_and_off_option : public option
     {
     public:
@@ -254,7 +260,7 @@ namespace librealsense
     class alternating_emitter_option : public option
     {
     public:
-        alternating_emitter_option(hw_monitor& hwm, sensor_base* depth_ep);
+        alternating_emitter_option(hw_monitor& hwm, sensor_base* depth_ep, bool is_fw_version_using_id);
         virtual ~alternating_emitter_option() = default;
         virtual void set(float value) override;
         virtual float query() const override;
@@ -262,7 +268,7 @@ namespace librealsense
         virtual bool is_enabled() const override { return true; }
         virtual const char* get_description() const override
         {
-            return "Alternating Emitter Pattern: 0:disabled(default), 1:enabled( emitter is toggled on/off on per-frame basis)";
+            return "Alternating emitter pattern, toggled on/off on per-frame basis";
         }
         virtual void enable_recording(std::function<void(const option &)> record_action) override { _record_action = record_action; }
 
@@ -271,5 +277,80 @@ namespace librealsense
         lazy<option_range> _range;
         hw_monitor& _hwm;
         sensor_base* _sensor;
+        bool _is_fw_version_using_id;
+    };
+
+    class emitter_always_on_option : public option
+    {
+    public:
+        emitter_always_on_option(hw_monitor& hwm, sensor_base* depth_ep);
+        virtual ~emitter_always_on_option() = default;
+        virtual void set(float value) override;
+        virtual float query() const override;
+        virtual option_range get_range() const override;
+        virtual bool is_enabled() const override { return true; }
+        virtual const char* get_description() const override
+        {
+            return "Emitter always on mode: 0:disabled(default), 1:enabled";
+        }
+        virtual void enable_recording(std::function<void(const option &)> record_action) override { _record_action = record_action; }
+
+    private:
+        std::function<void(const option &)> _record_action = [](const option&) {};
+        lazy<option_range> _range;
+        hw_monitor& _hwm;
+        sensor_base* _sensor;
+    };
+
+    class hdr_option : public option
+    {
+    public:
+        hdr_option(std::shared_ptr<hdr_config> hdr_cfg, rs2_option option, option_range range)
+            : _hdr_cfg(hdr_cfg), _option(option), _range(range) {}
+
+        hdr_option(std::shared_ptr<hdr_config> hdr_cfg, rs2_option option, option_range range, const std::map<float, std::string>& description_per_value)
+            : _hdr_cfg(hdr_cfg), _option(option), _range(range), _description_per_value(description_per_value) {}
+
+        virtual ~hdr_option() = default;
+        virtual void set(float value) override;
+        virtual float query() const override;
+        virtual option_range get_range() const override;
+        virtual bool is_enabled() const override { return true; }
+        virtual const char* get_description() const override { return "HDR Option"; }
+        virtual void enable_recording(std::function<void(const option&)> record_action) override { _record_action = record_action; }
+        virtual const char* get_value_description(float) const override;
+
+    private:
+        std::function<void(const option&)> _record_action = [](const option&) {};
+        std::shared_ptr<hdr_config> _hdr_cfg;
+        rs2_option _option;
+        option_range _range;
+        const std::map<float, std::string> _description_per_value;
+    };
+
+    // used for options that change their behavior when hdr configuration is in process
+    class hdr_conditional_option : public option
+    {
+    public:
+        hdr_conditional_option(std::shared_ptr<hdr_config> hdr_cfg,
+            std::shared_ptr<option> uvc_option,
+            std::shared_ptr<option> hdr_option):
+            _hdr_cfg(hdr_cfg),
+            _uvc_option(uvc_option),
+            _hdr_option(hdr_option) {}
+
+        virtual ~hdr_conditional_option() = default;
+        virtual void set(float value) override;
+        virtual float query() const override;
+        virtual option_range get_range() const override;
+        virtual bool is_enabled() const override;
+        virtual const char* get_description() const override;
+        virtual void enable_recording(std::function<void(const option&)> record_action) override { _record_action = record_action; }
+
+    private:
+        std::function<void(const option&)> _record_action = [](const option&) {};
+        std::shared_ptr<hdr_config> _hdr_cfg;
+        std::shared_ptr<option> _uvc_option;
+        std::shared_ptr<option> _hdr_option;
     };
 }

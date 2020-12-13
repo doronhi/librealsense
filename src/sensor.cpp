@@ -27,16 +27,16 @@ namespace librealsense
         recommended_proccesing_blocks_interface* owner)
         : recommended_proccesing_blocks_base(owner),
         _is_streaming(false),
-          _is_opened(false),
-          _notifications_processor(std::shared_ptr<notifications_processor>(new notifications_processor())),
-          _on_open(nullptr),
-          _metadata_parsers(std::make_shared<metadata_parser_map>()),
-          _owner(dev),
-          _profiles([this]() {
-                auto profiles = this->init_stream_profiles();
-                _owner->tag_profiles(profiles);
-                return profiles;
-          })
+        _is_opened(false),
+        _notifications_processor(std::shared_ptr<notifications_processor>(new notifications_processor())),
+        _on_open(nullptr),
+        _metadata_parsers(std::make_shared<metadata_parser_map>()),
+        _owner(dev),
+        _profiles([this]() {
+        auto profiles = this->init_stream_profiles();
+        _owner->tag_profiles(profiles);
+        return profiles;
+    })
     {
         register_option(RS2_OPTION_FRAMES_QUEUE_SIZE, _source.get_published_size_option());
 
@@ -58,6 +58,7 @@ namespace librealsense
 
     stream_profiles sensor_base::get_active_streams() const
     {
+        std::lock_guard<std::mutex> lock(_active_profile_mutex);
         return _active_profiles;
     }
 
@@ -130,7 +131,7 @@ namespace librealsense
         return _fourcc_to_rs2_format;
     }
 
-    std::shared_ptr<std::map<uint32_t, rs2_stream>>& sensor_base::get_fourcc_to_rs2_stream_map() 
+    std::shared_ptr<std::map<uint32_t, rs2_stream>>& sensor_base::get_fourcc_to_rs2_stream_map()
     {
         return _fourcc_to_rs2_stream;
     }
@@ -173,6 +174,7 @@ namespace librealsense
     }
     void sensor_base::set_active_streams(const stream_profiles& requests)
     {
+        std::lock_guard<std::mutex> lock(_active_profile_mutex);
         _active_profiles = requests;
     }
 
@@ -188,17 +190,21 @@ namespace librealsense
         _source_owner = owner;
     }
 
-    stream_profiles sensor_base::get_stream_profiles(int tag) const
+    stream_profiles sensor_base::get_stream_profiles( int tag ) const
     {
-        if (tag == profile_tag::PROFILE_TAG_ANY)
-            return *_profiles;
-
         stream_profiles results;
-        for (auto p : *_profiles)
+        bool const need_debug = tag & profile_tag::PROFILE_TAG_DEBUG;
+        bool const need_any = tag & profile_tag::PROFILE_TAG_ANY;
+        for( auto p : *_profiles )
         {
             auto curr_tag = p->get_tag();
-            if (curr_tag & tag)
-                results.push_back(p);
+            if( ! need_debug && ( curr_tag & profile_tag::PROFILE_TAG_DEBUG ) )
+                continue;
+
+            if( curr_tag & tag || need_any )
+            {
+                results.push_back( p );
+            }
         }
 
         return results;
@@ -260,7 +266,7 @@ namespace librealsense
             last_timestamp,
             last_frame_number,
             false,
-            fo.frame_size);
+            (uint32_t)fo.frame_size );
         fr->additional_data = additional_data;
 
         // update additional data
@@ -338,12 +344,12 @@ namespace librealsense
 
                     LOG_DEBUG("FrameAccepted," << librealsense::get_string(req_profile_base->get_stream_type())
                         << ",Counter," << std::dec << fr->additional_data.frame_number
-                            << ",Index," << req_profile_base->get_stream_index()
-                            << ",BackEndTS," << std::fixed << f.backend_time
-                            << ",SystemTime," << std::fixed << system_time
-                            << " ,diff_ts[Sys-BE]," << system_time - f.backend_time
-                            << ",TS," << std::fixed << timestamp << ",TS_Domain," << rs2_timestamp_domain_to_string(timestamp_domain)
-                            << ",last_frame_number," << last_frame_number << ",last_timestamp," << last_timestamp);
+                        << ",Index," << req_profile_base->get_stream_index()
+                        << ",BackEndTS," << std::fixed << f.backend_time
+                        << ",SystemTime," << std::fixed << system_time
+                        << " ,diff_ts[Sys-BE]," << system_time - f.backend_time
+                        << ",TS," << std::fixed << timestamp << ",TS_Domain," << rs2_timestamp_domain_to_string(timestamp_domain)
+                        << ",last_frame_number," << last_frame_number << ",last_timestamp," << last_timestamp);
 
                     last_frame_number = frame_counter;
                     last_timestamp = timestamp;
@@ -466,7 +472,7 @@ namespace librealsense
         std::lock_guard<std::mutex> lock(_configure_lock);
         if (_is_streaming)
             throw wrong_api_call_sequence_exception("start_streaming(...) failed. UVC device is already streaming!");
-        else if(!_is_opened)
+        else if (!_is_opened)
             throw wrong_api_call_sequence_exception("start_streaming(...) failed. UVC device was not opened!");
 
         raise_on_before_streaming_changes(true); //Required to be just before actual start allow recording to work
@@ -498,17 +504,46 @@ namespace librealsense
         std::lock_guard<std::mutex> lock(_power_lock);
         if (_user_count.fetch_add(1) == 0)
         {
-            _device->set_power_state(platform::D0);
-            for (auto&& xu : _xus) _device->init_xu(xu);
+            try
+            {
+                _device->set_power_state( platform::D0 );
+                for( auto && xu : _xus )
+                    _device->init_xu( xu );
+            }
+            catch( std::exception const & e )
+            {
+                _user_count.fetch_add( -1 );
+                LOG_ERROR( "acquire_power failed: " << e.what() );
+                throw;
+            }
+            catch( ... )
+            {
+                _user_count.fetch_add( -1 );
+                LOG_ERROR( "acquire_power failed" );
+                throw;
+            }
         }
     }
 
     void uvc_sensor::release_power()
     {
-        std::lock_guard<std::mutex> lock(_power_lock);
-        if (_user_count.fetch_add(-1) == 1)
+        std::lock_guard< std::mutex > lock( _power_lock );
+        if( _user_count.fetch_add( -1 ) == 1 )
         {
-            _device->set_power_state(platform::D3);
+            try
+            {
+                _device->set_power_state( platform::D3 );
+            }
+            catch( std::exception const & e )
+            {
+                // TODO may need to change the user-count?
+                LOG_ERROR( "release_power failed: " << e.what() );
+            }
+            catch( ... )
+            {
+                // TODO may need to change the user-count?
+                LOG_ERROR( "release_power failed" );
+            }
         }
     }
 
@@ -517,7 +552,6 @@ namespace librealsense
         std::unordered_set<std::shared_ptr<video_stream_profile>> profiles;
         power on(std::dynamic_pointer_cast<uvc_sensor>(shared_from_this()));
 
-        if (_uvc_profiles.empty()) {}
         _uvc_profiles = _device->get_profiles();
 
         for (auto&& p : _uvc_profiles)
@@ -559,11 +593,11 @@ namespace librealsense
     {
         if (info_container::supports_info(info) && (info_container::get_info(info) != val)) // Append existing infos
         {
-            _camera_info[info] += "\n" + std::move(val);
+            _camera_info[info] += "\n" + val;
         }
         else
         {
-            _camera_info[info] = std::move(val);
+            _camera_info[info] = val;
         }
     }
 
@@ -571,7 +605,7 @@ namespace librealsense
     {
         if (info_container::supports_info(info))
         {
-            _camera_info[info] = std::move(val);
+            _camera_info[info] = val;
         }
     }
     const std::string& info_container::get_info(rs2_camera_info info) const
@@ -588,7 +622,7 @@ namespace librealsense
     }
     void info_container::enable_recording(std::function<void(const info_interface&)> record_action)
     {
-       //info container is a read only class, nothing to record
+        //info container is a read only class, nothing to record
     }
 
     void info_container::update(std::shared_ptr<extension_snapshot> ext)
@@ -611,26 +645,6 @@ namespace librealsense
         register_option(id, std::make_shared<uvc_pu_option>(*this, id));
     }
 
-    void uvc_sensor::try_register_pu(rs2_option id)
-    {
-        auto opt = std::make_shared<uvc_pu_option>(*this, id);
-        try
-        {
-            auto range = opt->get_range();
-            if (range.max <= range.min || range.step <= 0 || range.def < range.min || range.def > range.max) return;
-
-            auto val = opt->query();
-            if (val < range.min || val > range.max) return;
-            opt->set(val);
-
-            register_option(id, opt);
-        }
-        catch (...)
-        {
-            LOG_WARNING("Exception was thrown when inspecting " << this->get_info(RS2_CAMERA_INFO_NAME) << " property " << opt->get_description());
-        }
-    }
-
     //////////////////////////////////////////////////////
     /////////////////// HID Sensor ///////////////////////
     //////////////////////////////////////////////////////
@@ -640,12 +654,12 @@ namespace librealsense
         const std::map<rs2_stream, std::map<unsigned, unsigned>>& fps_and_sampling_frequency_per_rs2_stream,
         const std::vector<std::pair<std::string, stream_profile>>& sensor_name_and_hid_profiles,
         device* dev)
-    : sensor_base("Raw Motion Module", dev, (recommended_proccesing_blocks_interface*)this), _sensor_name_and_hid_profiles(sensor_name_and_hid_profiles),
-      _fps_and_sampling_frequency_per_rs2_stream(fps_and_sampling_frequency_per_rs2_stream),
-      _hid_device(hid_device),
-      _is_configured_stream(RS2_STREAM_COUNT),
-      _hid_iio_timestamp_reader(move(hid_iio_timestamp_reader)),
-      _custom_hid_timestamp_reader(move(custom_hid_timestamp_reader))
+        : sensor_base("Raw Motion Module", dev, (recommended_proccesing_blocks_interface*)this), _sensor_name_and_hid_profiles(sensor_name_and_hid_profiles),
+        _fps_and_sampling_frequency_per_rs2_stream(fps_and_sampling_frequency_per_rs2_stream),
+        _hid_device(hid_device),
+        _is_configured_stream(RS2_STREAM_COUNT),
+        _hid_iio_timestamp_reader(move(hid_iio_timestamp_reader)),
+        _custom_hid_timestamp_reader(move(custom_hid_timestamp_reader))
     {
         register_metadata(RS2_FRAME_METADATA_BACKEND_TIMESTAMP, make_additional_data_parser(&frame_additional_data::backend_timestamp));
 
@@ -655,7 +669,7 @@ namespace librealsense
 
         std::vector<platform::hid_profile> profiles_vector;
         for (auto&& elem : frequency_per_sensor)
-            profiles_vector.push_back(platform::hid_profile{elem.first, elem.second});
+            profiles_vector.push_back(platform::hid_profile{ elem.first, elem.second });
 
         _hid_device->register_profiles(profiles_vector);
         for (auto&& elem : _hid_device->get_sensors())
@@ -672,7 +686,7 @@ namespace librealsense
             if (_is_opened)
                 close();
         }
-        catch(...)
+        catch (...)
         {
             LOG_ERROR("An error has occurred while stop_streaming()!");
         }
@@ -762,7 +776,7 @@ namespace librealsense
         std::lock_guard<std::mutex> lock(_configure_lock);
         if (_is_streaming)
             throw wrong_api_call_sequence_exception("start_streaming(...) failed. Hid device is already streaming!");
-        else if(!_is_opened)
+        else if (!_is_opened)
             throw wrong_api_call_sequence_exception("start_streaming(...) failed. Hid device was not opened!");
 
         _source.set_callback(callback);
@@ -867,7 +881,7 @@ namespace librealsense
         for (auto&& it = _hid_sensors.rbegin(); it != _hid_sensors.rend(); ++it)
         {
             auto profiles = get_sensor_profiles(it->name);
-            stream_requests.insert(stream_requests.end(), profiles.begin() ,profiles.end());
+            stream_requests.insert(stream_requests.end(), profiles.begin(), profiles.end());
         }
 
         return stream_requests;
@@ -886,10 +900,10 @@ namespace librealsense
     uint32_t hid_sensor::stream_to_fourcc(rs2_stream stream) const
     {
         uint32_t fourcc;
-        try{
+        try {
             fourcc = stream_and_fourcc.at(stream);
         }
-        catch(std::out_of_range)
+        catch (std::out_of_range)
         {
             throw invalid_value_exception(to_string() << "fourcc of stream " << rs2_stream_to_string(stream) << " not found!");
         }
@@ -911,17 +925,17 @@ namespace librealsense
             return fps;
     }
 
-    uvc_sensor::uvc_sensor(std::string name, 
+    uvc_sensor::uvc_sensor(std::string name,
         std::shared_ptr<platform::uvc_device> uvc_device,
         std::unique_ptr<frame_timestamp_reader> timestamp_reader,
         device* dev)
-       :   sensor_base(name, dev, (recommended_proccesing_blocks_interface*)this),
-          _device(move(uvc_device)),
-          _user_count(0),
-          _timestamp_reader(std::move(timestamp_reader))
+        : sensor_base(name, dev, (recommended_proccesing_blocks_interface*)this),
+        _device(move(uvc_device)),
+        _user_count(0),
+        _timestamp_reader(std::move(timestamp_reader))
     {
-        register_metadata(RS2_FRAME_METADATA_BACKEND_TIMESTAMP,     make_additional_data_parser(&frame_additional_data::backend_timestamp));
-        register_metadata(RS2_FRAME_METADATA_RAW_FRAME_SIZE,        make_additional_data_parser(&frame_additional_data::raw_size));
+        register_metadata(RS2_FRAME_METADATA_BACKEND_TIMESTAMP, make_additional_data_parser(&frame_additional_data::backend_timestamp));
+        register_metadata(RS2_FRAME_METADATA_RAW_FRAME_SIZE, make_additional_data_parser(&frame_additional_data::raw_size));
     }
 
     iio_hid_timestamp_reader::iio_hid_timestamp_reader()
@@ -958,7 +972,7 @@ namespace librealsense
             auto timestamp = *(reinterpret_cast<uint32_t*>(f->additional_data.metadata_blob.data()));
             if (f->additional_data.metadata_size >= platform::hid_header_size)
                 timestamp = static_cast<uint32_t>(reinterpret_cast<const platform::hid_header*>(f->additional_data.metadata_blob.data())->timestamp);
-            
+
             // HID timestamps are aligned to FW Default - usec units
             return static_cast<rs2_time_t>(timestamp * TIMESTAMP_USEC_TO_MSEC);
         }
@@ -1040,11 +1054,55 @@ namespace librealsense
         }
     }
 
+    // Register the option to both raw sensor and synthetic sensor.
     void synthetic_sensor::register_option(rs2_option id, std::shared_ptr<option> option)
     {
-        // Register the option to both raw sensor and synthetic sensor.
         _raw_sensor->register_option(id, option);
         sensor_base::register_option(id, option);
+    }
+
+    // Used in dynamic discovery of supported controls in generic UVC devices
+    bool synthetic_sensor::try_register_option(rs2_option id, std::shared_ptr<option> option)
+    {
+        bool res=false;
+        try
+        {
+            auto range = option->get_range();
+            bool invalid_opt = (range.max < range.min || range.step < 0 || range.def < range.min || range.def > range.max) ||
+                    (range.max == range.min && range.min == range.def && range.def == range.step);
+            bool readonly_opt = ((range.max == range.min ) && (0.f != range.min ) && ( 0.f == range.step));
+
+            if (invalid_opt)
+            {
+                LOG_WARNING(this->get_info(RS2_CAMERA_INFO_NAME) << ": skipping " << rs2_option_to_string(id)
+                            << " control. descriptor: [min/max/step/default]= ["
+                            << range.min << "/" << range.max << "/" << range.step << "/" << range.def << "]");
+                return res;
+            }
+
+            if (readonly_opt)
+            {
+                LOG_INFO(this->get_info(RS2_CAMERA_INFO_NAME) << ": " << rs2_option_to_string(id)
+                        << " control was added as read-only. descriptor: [min/max/step/default]= ["
+                        << range.min << "/" << range.max << "/" << range.step << "/" << range.def << "]");
+            }
+
+            // Check getter only due to options coupling (e.g. Exposure<->AutoExposure)
+            auto val = option->query();
+            if (val < range.min || val > range.max)
+            {
+                LOG_WARNING(this->get_info(RS2_CAMERA_INFO_NAME) << ": Invalid reading for " << rs2_option_to_string(id)
+                            << ", val = " << val << " range [min..max] = [" << range.min << "/" << range.max << "]");
+            }
+
+            register_option(id, option);
+            res = true;
+        }
+        catch (...)
+        {
+            LOG_WARNING("Failed to add " << rs2_option_to_string(id)<< " control for " << this->get_info(RS2_CAMERA_INFO_NAME));
+        }
+        return res;
     }
 
     void synthetic_sensor::unregister_option(rs2_option id)
@@ -1059,18 +1117,25 @@ namespace librealsense
         register_option(id, std::make_shared<uvc_pu_option>(*raw_uvc_sensor.get(), id));
     }
 
+    bool synthetic_sensor::try_register_pu(rs2_option id)
+    {
+        const auto&& raw_uvc_sensor = As<uvc_sensor, sensor_base>(_raw_sensor);
+        return try_register_option(id, std::make_shared<uvc_pu_option>(*raw_uvc_sensor.get(), id));
+    }
+
     void synthetic_sensor::sort_profiles(stream_profiles* profiles)
     {
         std::sort(profiles->begin(), profiles->end(), [](const std::shared_ptr<stream_profile_interface>& ap,
-                                         const std::shared_ptr<stream_profile_interface>& bp)
+            const std::shared_ptr<stream_profile_interface>& bp)
         {
             const auto&& a = to_profile(ap.get());
             const auto&& b = to_profile(bp.get());
 
             // stream == RS2_STREAM_COLOR && format == RS2_FORMAT_RGB8 element works around the fact that Y16 gets priority over RGB8 when both
             // are available for pipeline stream resolution
-            const auto&& at = std::make_tuple(a.stream, a.width, a.height, a.fps, a.stream == RS2_STREAM_COLOR && a.format == RS2_FORMAT_RGB8, a.format);
-            const auto&& bt = std::make_tuple(b.stream, b.width, b.height, b.fps, b.stream == RS2_STREAM_COLOR && b.format == RS2_FORMAT_RGB8, b.format);
+            // Note: Sort Stream Index decsending to make sure IR1 is chosen over IR2
+            const auto&& at = std::make_tuple(a.stream, -a.index, a.width, a.height, a.fps, a.stream == RS2_STREAM_COLOR && a.format == RS2_FORMAT_RGB8, a.format);
+            const auto&& bt = std::make_tuple(b.stream, -b.index, b.width, b.height, b.fps, b.stream == RS2_STREAM_COLOR && b.format == RS2_FORMAT_RGB8, b.format);
 
             return at > bt;
         });
@@ -1091,6 +1156,7 @@ namespace librealsense
             cloned = std::make_shared<motion_stream_profile>(platform::stream_profile{});
         }
 
+        assign_stream(profile, cloned);
         cloned->set_unique_id(profile->get_unique_id());
         cloned->set_format(profile->get_format());
         cloned->set_stream_index(profile->get_stream_index());
@@ -1147,7 +1213,7 @@ namespace librealsense
     stream_profiles synthetic_sensor::init_stream_profiles()
     {
         stream_profiles result_profiles;
-        auto profiles = _raw_sensor->get_stream_profiles();
+        auto profiles = _raw_sensor->get_stream_profiles( PROFILE_TAG_ANY | PROFILE_TAG_DEBUG );
 
         for (auto&& pbf : _pb_factories)
         {
@@ -1211,7 +1277,7 @@ namespace librealsense
     }
 
     std::pair<std::shared_ptr<processing_block_factory>, stream_profiles> synthetic_sensor::find_requests_best_pb_match(const stream_profiles& requests)
-    {      
+    {
         // Find and retrieve best fitting processing block to the given requests, and the requests which were the best fit.
 
         // For video stream, the best fitting processing block is defined as the processing block which its sources
@@ -1227,19 +1293,19 @@ namespace librealsense
         for (auto&& pbf : _pb_factories)
         {
             auto satisfied_req = pbf->find_satisfied_requests(requests, _pbf_supported_profiles[pbf.get()]);
-            satisfied_count = satisfied_req.size();
+            satisfied_count = (int)satisfied_req.size();
             if (satisfied_count > max_satisfied_req
                 || (satisfied_count == max_satisfied_req
                     && pbf->get_source_info().size() < best_source_size))
             {
                 max_satisfied_req = satisfied_count;
-                best_source_size = pbf->get_source_info().size();
+                best_source_size = (int)pbf->get_source_info().size();
                 best_match_processing_block_factory = pbf;
                 best_match_requests = satisfied_req;
             }
         }
 
-        return {best_match_processing_block_factory, best_match_requests};
+        return { best_match_processing_block_factory, best_match_requests };
     }
 
     void synthetic_sensor::add_source_profile_missing_data(std::shared_ptr<stream_profile_interface>& target)
@@ -1290,13 +1356,13 @@ namespace librealsense
         std::unordered_set<std::shared_ptr<stream_profile_interface>> resolved_req_set;
         stream_profiles resolved_req;
         stream_profiles unhandled_reqs(requests);
-        
+
         // cache the requests
         for (auto&& req : requests)
         {
             _cached_requests[req->get_format()].push_back(req);
         }
-        
+
         // while not finished handling all of the requests do
         while (!unhandled_reqs.empty())
         {
@@ -1304,7 +1370,7 @@ namespace librealsense
             const auto&& best_match = find_requests_best_pb_match(unhandled_reqs);
             auto&& best_pbf = best_match.first;
             auto&& best_reqs = best_match.second;
-            
+
             // mark as handled resolved requests
             for (auto&& req : best_reqs)
             {
@@ -1378,10 +1444,12 @@ namespace librealsense
         for (auto&& entry : _profiles_to_processing_block)
         {
             for (auto&& pb : entry.second)
-            unregister_processing_block_options(*pb);
+                unregister_processing_block_options(*pb);
         }
         _profiles_to_processing_block.erase(begin(_profiles_to_processing_block), end(_profiles_to_processing_block));
         _cached_requests.erase(_cached_requests.begin(), _cached_requests.end());
+        set_active_streams({});
+        _post_process_callback.reset();
     }
 
     template<class T>
@@ -1389,7 +1457,7 @@ namespace librealsense
     {
         return {
             new internal_frame_callback<T>(callback),
-            [](rs2_frame_callback* p) { /*p->release(); */}
+            [](rs2_frame_callback* p) { p->release(); }
         };
     }
 
@@ -1455,14 +1523,14 @@ namespace librealsense
         {
             auto&& pbs = pb_entry.second;
             for (auto&& pb : pbs)
-            if (pb)
-            {
-                pb->set_output_callback(output_cb);
-            }
+                if (pb)
+                {
+                    pb->set_output_callback(output_cb);
+                }
         }
 
         // Invoke processing blocks callback
-        const auto&& process_cb = make_callback([&, callback, this](frame_holder f) {
+        const auto&& process_cb = make_callback([&, this](frame_holder f) {
             if (!f)
                 return;
 
@@ -1493,7 +1561,7 @@ namespace librealsense
 
     void synthetic_sensor::register_processing_block(const processing_block_factory& pbf)
     {
-        _pb_factories.push_back(std::make_shared<processing_block_factory>(std::move(pbf)));
+        _pb_factories.push_back(std::make_shared<processing_block_factory>(pbf));
     }
 
     void synthetic_sensor::register_processing_block(const std::vector<processing_block_factory>& pbfs)
