@@ -28,6 +28,7 @@ TEST_CASE("emitter-on-off works if started before streaming", "[d400][live]")
     bool even = true;
     std::vector<int> emitter_state;
     emitter_state.reserve(record_frames);
+    size_t skip_frames(4);
 
     auto wait_for_streams = [&]() {
         std::unique_lock< std::mutex > lock(m);
@@ -41,9 +42,14 @@ TEST_CASE("emitter-on-off works if started before streaming", "[d400][live]")
         if (((bool(f.get_frame_number() % 2)) != even) && f.supports_frame_metadata(RS2_FRAME_METADATA_FRAME_LASER_POWER_MODE) &&
             (emitter_state.size() < record_frames) )
         {
+            if (skip_frames > 0)
+            {
+                skip_frames--;
+                return;
+            }
             even = !even;  // Alternating odd/even frame number is sufficient to avoid duplicates
             auto val = static_cast<int>(f.get_frame_metadata(RS2_FRAME_METADATA_FRAME_LASER_POWER_MODE));
-            //std::cout << "val: " << val << ", " << emitter_state.size() << std::endl;
+            // std::cout << "val: " << val << ", " << emitter_state.size() << std::endl;
             emitter_state.push_back(val);
         }
         cv.notify_one();
