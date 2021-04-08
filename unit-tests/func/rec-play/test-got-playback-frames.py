@@ -110,9 +110,9 @@ temp_dir = tempfile.TemporaryDirectory( prefix='recordings_' )
 file_name = temp_dir.name + os.sep + 'rec.bag'
 
 ################################################################################################
+cfg = pipeline = None
 test.start("Trying to record and playback using pipeline interface")
 
-cfg = pipeline = None
 try:
     # creating a pipeline and recording to a file
     pipeline = rs.pipeline()
@@ -235,8 +235,14 @@ try:
     color_sensor.open( cp )
     color_sensor.start( sync )
 
-    # if the record-playback worked we will get frames, otherwise the next line will timeout and throw
-    sync.wait_for_frames()
+    # if the syncer worked with record-playback we will get 2 frames in most framesets, if not all of them. Otherwise the test will throw
+    max_frames_in_set = 0
+    for count in range(30):
+        frames = sync.wait_for_frames()
+        max_frames_in_set = max(max_frames_in_set, frames.size())
+    if max_frames_in_set < 2:
+        raise Exception("Frameset should include 2 frames. Got only %d" % max_frames_in_set)
+
 except Exception:
     test.unexpected_exception()
 finally: # we must remove all references to the file so the temporary folder can be deleted
